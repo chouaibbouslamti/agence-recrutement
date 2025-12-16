@@ -1,0 +1,83 @@
+===========================================
+COMMANDES RAPIDES - AGENCE DE RECRUTEMENT
+===========================================
+
+📁 ALLER DANS LE DOSSIER DU PROJET
+-----------------------------------
+cd "C:\Users\mr chou\Desktop\agencerecrutement"
+
+
+🚀 DÉMARRER L'APPLICATION (Méthode Simple)
+-------------------------------------------
+mvn spring-boot:run
+
+
+🔧 COMPILER LE PROJET
+---------------------
+mvn clean compile
+
+
+📦 CRÉER LE JAR
+---------------
+mvn clean package
+
+
+▶️ EXÉCUTER LE JAR
+------------------
+java -jar target/agencerecrutement-0.0.1-SNAPSHOT.jar
+
+
+🗄️ VÉRIFIER MYSQL
+------------------
+mysql -u root -p
+
+
+🛑 ARRÊTER L'APPLICATION
+-------------------------
+Ctrl+C (dans le terminal)
+
+
+📊 VÉRIFIER LES PROCESSUS JAVA
+--------------------------------
+jps
+OU
+Get-Process -Name java
+
+
+🔍 VÉRIFIER LE PORT MYSQL
+--------------------------
+netstat -ano | findstr :3306
+
+
+✅ VÉRIFIER JAVA
+-----------------
+java -version
+
+
+✅ VÉRIFIER MAVEN
+-----------------
+mvn --version
+
+
+🧹 NETTOYER LE PROJET
+----------------------
+mvn clean
+
+
+📋 VÉRIFIER LES DÉPENDANCES
+----------------------------
+mvn dependency:tree
+
+
+===========================================
+SCRIPT BATCH DISPONIBLE
+===========================================
+Double-cliquez sur: demarrer.bat
+(Pour un démarrage automatique avec vérifications)
+
+===========================================
+COMPTE ADMIN PAR DÉFAUT
+===========================================
+Login: admin
+Password: admin
+

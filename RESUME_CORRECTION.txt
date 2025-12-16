@@ -1,0 +1,34 @@
+========================================
+CORRECTION DE L'ERREUR SPRING SECURITY
+========================================
+
+PROBLÈME:
+---------
+Erreur: java.lang.ClassNotFoundException: jakarta.servlet.Filter
+
+Spring Security Web tentait de charger des composants servlet 
+qui n'existent pas dans une application JavaFX.
+
+SOLUTION APPLIQUÉE:
+-------------------
+1. ✅ Supprimé spring-boot-starter-security (dépendances web)
+2. ✅ Simplifié SecurityConfig (garde seulement PasswordEncoder)
+3. ✅ Conservé spring-security-crypto (pour BCrypt)
+
+RÉSULTAT:
+---------
+✅ Compilation réussie
+✅ Plus d'erreur
+✅ BCrypt fonctionne toujours
+✅ Application peut démarrer
+
+COMMANDE POUR RELANCER:
+-----------------------
+mvn spring-boot:run
+
+OU
+
+.\demarrer.bat
+
+========================================
+
