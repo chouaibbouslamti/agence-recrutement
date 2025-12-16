@@ -15,13 +15,13 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class Entreprise extends Utilisateur {
     
-    @Column(nullable = false)
+    @Column
     private String raisonSociale;
     
-    @Column(nullable = false)
+    @Column
     private String adresse;
     
-    @Column(nullable = false)
+    @Column
     private String telephone;
     
     @Column(columnDefinition = "TEXT")

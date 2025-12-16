@@ -15,27 +15,27 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class DemandeurEmploi extends Utilisateur {
     
-    @Column(nullable = false)
+    @Column
     private String nom;
     
-    @Column(nullable = false)
+    @Column
     private String prenom;
     
-    @Column(nullable = false)
+    @Column
     private String adresse;
     
-    @Column(nullable = false)
+    @Column
     private String telephone;
     
     private String fax;
     
-    @Column(nullable = false)
+    @Column
     private String diplome;
     
-    @Column(nullable = false)
+    @Column
     private Integer experience; // Nombre d'années d'expérience
     
-    @Column(nullable = false)
+    @Column
     private Double salaireSouhaite;
     
     @OneToMany(mappedBy = "demandeur", cascade = CascadeType.ALL, orphanRemoval = true)
