@@ -1,6 +1,7 @@
 package com.example.agencerecrutement.javafx.controllers;
 
 import com.example.agencerecrutement.javafx.dialogs.InscriptionDialog;
+import com.example.agencerecrutement.javafx.dialogs.MotDePasseOublieDialog;
 import com.example.agencerecrutement.model.Utilisateur;
 import com.example.agencerecrutement.repository.UtilisateurRepository;
 import com.example.agencerecrutement.service.AuthentificationService;
@@ -119,11 +120,16 @@ public class LoginController {
         inscriptionButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px;");
         inscriptionButton.setOnAction(e -> handleInscription());
         
+        Button motDePasseOublieButton = new Button("Mot de passe oublié");
+        motDePasseOublieButton.setPrefWidth(250);
+        motDePasseOublieButton.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 12px; -fx-border-color: #5a6268; -fx-border-radius: 3px;");
+        motDePasseOublieButton.setOnAction(e -> handleMotDePasseOublie());
+        
         errorLabel = new Label();
         errorLabel.setTextFill(Color.RED);
         errorLabel.setVisible(false);
         
-        root.getChildren().addAll(titleLabel, subtitleLabel, loginCombo, passwordField, loginButton, inscriptionButton, errorLabel);
+        root.getChildren().addAll(titleLabel, subtitleLabel, loginCombo, passwordField, loginButton, inscriptionButton, motDePasseOublieButton, errorLabel);
     }
     
     private void loadLoginSuggestions() {
@@ -218,6 +224,11 @@ public class LoginController {
         newInscriptionButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px;");
         newInscriptionButton.setOnAction(e -> handleInscription());
         
+        Button newMotDePasseOublieButton = new Button("Mot de passe oublié");
+        newMotDePasseOublieButton.setPrefWidth(250);
+        newMotDePasseOublieButton.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 12px; -fx-border-color: #5a6268; -fx-border-radius: 3px;");
+        newMotDePasseOublieButton.setOnAction(e -> handleMotDePasseOublie());
+        
         // Permettre la connexion avec Enter
         newPasswordField.setOnKeyPressed(ev -> {
             if (ev.getCode() == KeyCode.ENTER) {
@@ -249,7 +260,7 @@ public class LoginController {
             }
         });
         
-        newRoot.getChildren().addAll(titleLabel, subtitleLabel, newLoginCombo, newPasswordField, newLoginButton, newInscriptionButton, newErrorLabel);
+        newRoot.getChildren().addAll(titleLabel, subtitleLabel, newLoginCombo, newPasswordField, newLoginButton, newInscriptionButton, newMotDePasseOublieButton, newErrorLabel);
         
         return newRoot;
     }
@@ -309,6 +320,11 @@ public class LoginController {
                 alert.showAndWait();
             }
         }
+    }
+    
+    private void handleMotDePasseOublie() {
+        MotDePasseOublieDialog dialog = new MotDePasseOublieDialog();
+        dialog.showAndWait();
     }
     
     private void showError(String message) {
