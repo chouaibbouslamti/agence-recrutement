@@ -902,8 +902,58 @@ public class MainController {
         TextField langueField = new TextField();
         langueField.setPromptText("Langue");
         ComboBox<Categorie> categorieCombo = new ComboBox<>();
-        categorieCombo.getItems().addAll(journalService.getAllCategories());
+        List<Categorie> categories = journalService.getAllCategories();
+        categorieCombo.getItems().addAll(categories);
         categorieCombo.setPromptText("Catégorie");
+        // Configurer l'affichage du ComboBox pour montrer le libellé
+        categorieCombo.setCellFactory(param -> new ListCell<Categorie>() {
+            @Override
+            protected void updateItem(Categorie item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getLibelle());
+                }
+            }
+        });
+        categorieCombo.setButtonCell(new ListCell<Categorie>() {
+            @Override
+            protected void updateItem(Categorie item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getLibelle());
+                }
+            }
+        });
+        
+        // Bouton pour créer une nouvelle catégorie si aucune n'existe
+        Button btnNouvelleCategorie = new Button("Nouvelle catégorie");
+        btnNouvelleCategorie.setOnAction(e -> {
+            TextInputDialog categorieDialog = new TextInputDialog();
+            categorieDialog.setTitle("Nouvelle catégorie");
+            categorieDialog.setHeaderText("Créer une nouvelle catégorie");
+            categorieDialog.setContentText("Libellé de la catégorie:");
+            java.util.Optional<String> result = categorieDialog.showAndWait();
+            if (result.isPresent() && !result.get().trim().isEmpty()) {
+                try {
+                    Categorie nouvelleCategorie = journalService.creerCategorie(result.get().trim());
+                    categorieCombo.getItems().add(nouvelleCategorie);
+                    categorieCombo.setValue(nouvelleCategorie);
+                    Alert success = new Alert(Alert.AlertType.INFORMATION);
+                    success.setTitle("Succès");
+                    success.setContentText("Catégorie créée avec succès");
+                    success.showAndWait();
+                } catch (Exception ex) {
+                    Alert error = new Alert(Alert.AlertType.ERROR);
+                    error.setTitle("Erreur");
+                    error.setContentText("Erreur lors de la création de la catégorie: " + ex.getMessage());
+                    error.showAndWait();
+                }
+            }
+        });
         
         grid.add(new Label("Code:"), 0, 0);
         grid.add(codeField, 1, 0);
@@ -914,18 +964,53 @@ public class MainController {
         grid.add(new Label("Langue:"), 0, 3);
         grid.add(langueField, 1, 3);
         grid.add(new Label("Catégorie:"), 0, 4);
-        grid.add(categorieCombo, 1, 4);
+        HBox categorieBox = new HBox(10);
+        categorieBox.getChildren().addAll(categorieCombo, btnNouvelleCategorie);
+        grid.add(categorieBox, 1, 4);
         
         dialog.getDialogPane().setContent(grid);
         
+        // Désactiver le bouton Créer si les champs ne sont pas remplis
+        javafx.scene.control.Button createButton = (javafx.scene.control.Button) dialog.getDialogPane().lookupButton(createButtonType);
+        createButton.setDisable(true);
+        
+        // Validation des champs
+        Runnable validateFields = () -> {
+            boolean isValid = !codeField.getText().trim().isEmpty() &&
+                             !nomField.getText().trim().isEmpty() &&
+                             periodiciteCombo.getValue() != null &&
+                             !langueField.getText().trim().isEmpty() &&
+                             categorieCombo.getValue() != null;
+            createButton.setDisable(!isValid);
+        };
+        
+        codeField.textProperty().addListener((observable, oldValue, newValue) -> validateFields.run());
+        nomField.textProperty().addListener((observable, oldValue, newValue) -> validateFields.run());
+        periodiciteCombo.valueProperty().addListener((observable, oldValue, newValue) -> validateFields.run());
+        langueField.textProperty().addListener((observable, oldValue, newValue) -> validateFields.run());
+        categorieCombo.valueProperty().addListener((observable, oldValue, newValue) -> validateFields.run());
+        
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == createButtonType) {
+                // Validation finale
+                if (codeField.getText().trim().isEmpty() || 
+                    nomField.getText().trim().isEmpty() ||
+                    periodiciteCombo.getValue() == null ||
+                    langueField.getText().trim().isEmpty() ||
+                    categorieCombo.getValue() == null) {
+                    Alert error = new Alert(Alert.AlertType.WARNING);
+                    error.setTitle("Validation");
+                    error.setContentText("Veuillez remplir tous les champs");
+                    error.showAndWait();
+                    return null;
+                }
+                
                 try {
                     Journal journal = journalService.creerJournal(
-                        codeField.getText(),
-                        nomField.getText(),
+                        codeField.getText().trim(),
+                        nomField.getText().trim(),
                         periodiciteCombo.getValue(),
-                        langueField.getText(),
+                        langueField.getText().trim(),
                         categorieCombo.getValue().getIdCategorie()
                     );
                     return journal;
