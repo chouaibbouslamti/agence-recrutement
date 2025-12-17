@@ -177,6 +177,21 @@ public class MainController {
         
         headerBox.getChildren().addAll(welcomeLabel, logoutButton);
         content.getChildren().add(headerBox);
+
+        // Barre de recherche globale (offres, journaux, éditions)
+        HBox searchBox = new HBox(10);
+        searchBox.setPadding(new Insets(10, 0, 0, 0));
+        Label searchLabel = new Label("Recherche :");
+        TextField searchField = new TextField();
+        searchField.setPromptText("Tapez un mot-clé (titre d'offre, nom de journal, numéro d'édition...)");
+        searchField.setPrefWidth(400);
+        ComboBox<String> typeCombo = new ComboBox<>();
+        typeCombo.getItems().addAll("Offres", "Journaux", "Éditions");
+        typeCombo.setValue("Offres");
+        Button searchButton = new Button("Rechercher");
+        searchButton.setOnAction(e -> showSearchDialog(searchField.getText().trim(), typeCombo.getValue()));
+        searchBox.getChildren().addAll(searchLabel, searchField, typeCombo, searchButton);
+        content.getChildren().add(searchBox);
         
         // Contenu spécifique selon le rôle
         if (utilisateurConnecte.getRole() == Utilisateur.Role.ENTREPRISE) {
@@ -987,6 +1002,130 @@ public class MainController {
         alert.setHeaderText(header);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    /**
+     * Recherche globale (offres, journaux, éditions) accessible dans tous les espaces
+     * via la barre de recherche en haut de l'écran.
+     */
+    private void showSearchDialog(String query, String type) {
+        if (query == null || query.isEmpty()) {
+            showWarning("Recherche", "Veuillez saisir un mot-clé pour la recherche.");
+            return;
+        }
+
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Résultats de la recherche");
+        dialog.setHeaderText("Résultats pour \"" + query + "\" dans " + type.toLowerCase());
+
+        ButtonType closeButtonType = new ButtonType("Fermer", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().add(closeButtonType);
+
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
+
+        String q = query.toLowerCase();
+
+        if ("Offres".equals(type)) {
+            TableView<Offre> table = new TableView<>();
+            TableColumn<Offre, Long> idCol = new TableColumn<>("ID");
+            idCol.setCellValueFactory(new PropertyValueFactory<>("idOffre"));
+            idCol.setPrefWidth(70);
+
+            TableColumn<Offre, String> titreCol = new TableColumn<>("Titre");
+            titreCol.setCellValueFactory(new PropertyValueFactory<>("titre"));
+            titreCol.setPrefWidth(200);
+
+            TableColumn<Offre, String> compCol = new TableColumn<>("Compétences");
+            compCol.setCellValueFactory(new PropertyValueFactory<>("competences"));
+            compCol.setPrefWidth(250);
+
+            TableColumn<Offre, String> entrepriseCol = new TableColumn<>("Entreprise");
+            entrepriseCol.setCellValueFactory(param ->
+                new javafx.beans.property.SimpleStringProperty(
+                    param.getValue().getEntreprise() != null ? param.getValue().getEntreprise().getRaisonSociale() : ""));
+            entrepriseCol.setPrefWidth(200);
+
+            table.getColumns().addAll(idCol, titreCol, compCol, entrepriseCol);
+
+            var allOffres = offreRepository.findAll();
+            allOffres.stream()
+                .filter(o ->
+                    (o.getTitre() != null && o.getTitre().toLowerCase().contains(q)) ||
+                    (o.getCompetences() != null && o.getCompetences().toLowerCase().contains(q)))
+                .forEach(table.getItems()::add);
+
+            root.getChildren().addAll(new Label("Offres trouvées :"), table);
+
+        } else if ("Journaux".equals(type)) {
+            TableView<Journal> table = new TableView<>();
+
+            TableColumn<Journal, String> codeCol = new TableColumn<>("Code");
+            codeCol.setCellValueFactory(new PropertyValueFactory<>("codeJournal"));
+            codeCol.setPrefWidth(100);
+
+            TableColumn<Journal, String> nomCol = new TableColumn<>("Nom");
+            nomCol.setCellValueFactory(new PropertyValueFactory<>("nom"));
+            nomCol.setPrefWidth(200);
+
+            TableColumn<Journal, String> catCol = new TableColumn<>("Catégorie");
+            catCol.setCellValueFactory(param ->
+                new javafx.beans.property.SimpleStringProperty(
+                    param.getValue().getCategorie() != null ? param.getValue().getCategorie().getLibelle() : ""));
+            catCol.setPrefWidth(200);
+
+            table.getColumns().addAll(codeCol, nomCol, catCol);
+
+            var journaux = journalService.getAllJournaux();
+            journaux.stream()
+                .filter(j ->
+                    (j.getNom() != null && j.getNom().toLowerCase().contains(q)) ||
+                    (j.getCodeJournal() != null && j.getCodeJournal().toLowerCase().contains(q)))
+                .forEach(table.getItems()::add);
+
+            root.getChildren().addAll(new Label("Journaux trouvés :"), table);
+
+        } else if ("Éditions".equals(type)) {
+            TableView<Edition> table = new TableView<>();
+
+            TableColumn<Edition, Long> idCol = new TableColumn<>("ID");
+            idCol.setCellValueFactory(new PropertyValueFactory<>("idEdition"));
+            idCol.setPrefWidth(70);
+
+            TableColumn<Edition, Integer> numCol = new TableColumn<>("Numéro");
+            numCol.setCellValueFactory(new PropertyValueFactory<>("numeroEdition"));
+            numCol.setPrefWidth(100);
+
+            TableColumn<Edition, String> dateCol = new TableColumn<>("Date");
+            dateCol.setCellValueFactory(param ->
+                new javafx.beans.property.SimpleStringProperty(param.getValue().getDateParution().toString()));
+            dateCol.setPrefWidth(120);
+
+            TableColumn<Edition, String> journalCol = new TableColumn<>("Journal");
+            journalCol.setCellValueFactory(param ->
+                new javafx.beans.property.SimpleStringProperty(
+                    param.getValue().getJournal() != null ? param.getValue().getJournal().getNom() : ""));
+            journalCol.setPrefWidth(220);
+
+            table.getColumns().addAll(idCol, numCol, dateCol, journalCol);
+
+            // Récupérer toutes les éditions via les journaux
+            var journaux = journalService.getAllJournaux();
+            journaux.stream()
+                .flatMap(j -> journalService.getEditionsByJournal(j.getCodeJournal()).stream())
+                .filter(ed ->
+                    String.valueOf(ed.getNumeroEdition()).toLowerCase().contains(q) ||
+                    ed.getDateParution().toString().toLowerCase().contains(q) ||
+                    (ed.getJournal() != null &&
+                     ((ed.getJournal().getNom() != null && ed.getJournal().getNom().toLowerCase().contains(q)) ||
+                      (ed.getJournal().getCodeJournal() != null && ed.getJournal().getCodeJournal().toLowerCase().contains(q)))))
+                .forEach(table.getItems()::add);
+
+            root.getChildren().addAll(new Label("Éditions trouvées :"), table);
+        }
+
+        dialog.getDialogPane().setContent(root);
+        dialog.showAndWait();
     }
     
     /**
