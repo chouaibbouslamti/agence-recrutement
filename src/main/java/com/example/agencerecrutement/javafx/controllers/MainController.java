@@ -33,6 +33,7 @@ public class MainController {
     private final CandidatureRepository candidatureRepository;
     private final RecrutementRepository recrutementRepository;
     private final AbonnementRepository abonnementRepository;
+    private final PublicationOffreRepository publicationOffreRepository;
     
     private ConfigurableApplicationContext applicationContext;
     private Utilisateur utilisateurConnecte;
@@ -44,7 +45,8 @@ public class MainController {
                          UtilisateurRepository utilisateurRepository, EntrepriseRepository entrepriseRepository,
                          DemandeurEmploiRepository demandeurEmploiRepository, JournalRepository journalRepository,
                          OffreRepository offreRepository, CandidatureRepository candidatureRepository,
-                         RecrutementRepository recrutementRepository, AbonnementRepository abonnementRepository) {
+                         RecrutementRepository recrutementRepository, AbonnementRepository abonnementRepository,
+                         PublicationOffreRepository publicationOffreRepository) {
         this.entrepriseService = entrepriseService;
         this.offreService = offreService;
         this.candidatureService = candidatureService;
@@ -59,6 +61,7 @@ public class MainController {
         this.candidatureRepository = candidatureRepository;
         this.recrutementRepository = recrutementRepository;
         this.abonnementRepository = abonnementRepository;
+        this.publicationOffreRepository = publicationOffreRepository;
         initializeView();
     }
     
@@ -240,8 +243,11 @@ public class MainController {
         Tab tabMesCandidatures = new Tab("Mes candidatures");
         tabMesCandidatures.setContent(createMesCandidaturesTab());
         tabMesCandidatures.setClosable(false);
+        Tab tabJournaux = new Tab("Journaux & éditions");
+        tabJournaux.setContent(createJournauxPourDemandeurPane());
+        tabJournaux.setClosable(false);
         
-        tabPane.getTabs().addAll(tabOffres, tabMesCandidatures);
+        tabPane.getTabs().addAll(tabOffres, tabMesCandidatures, tabJournaux);
         
         pane.getChildren().addAll(title, btnEditCoordonnees, tabPane);
         return pane;
@@ -280,6 +286,7 @@ public class MainController {
         
         Button btnNouvelleOffre = new Button("Nouvelle offre");
         btnNouvelleOffre.setOnAction(e -> showNouvelleOffreDialog());
+        Button btnPublierOffre = new Button("Publier l'offre sélectionnée");
         
         // TableView pour afficher les offres
         TableView<Offre> tableView = new TableView<>();
@@ -308,7 +315,35 @@ public class MainController {
             ex.printStackTrace();
         }
         
-        pane.getChildren().addAll(btnNouvelleOffre, tableView);
+        // Action de publication
+        btnPublierOffre.setOnAction(e -> {
+            Offre selected = tableView.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showWarning("Sélection", "Veuillez sélectionner une offre à publier.");
+                return;
+            }
+            if (!selected.estActive()) {
+                showWarning("Offre désactivée", "Vous ne pouvez publier qu'une offre active.");
+                return;
+            }
+            try {
+                Entreprise entreprise = (Entreprise) utilisateurConnecte;
+                PublierOffreDialog dialog = new PublierOffreDialog(
+                    offreService,
+                    entrepriseService,
+                    journalService,
+                    entreprise.getIdUtilisateur(),
+                    selected
+                );
+                java.util.Optional<PublicationOffre> result = dialog.showAndWait();
+                result.ifPresent(pub -> showInfo("Succès", "Offre publiée avec succès dans le journal."));
+            } catch (Exception ex) {
+                showError("Erreur lors de la publication", ex.getMessage());
+            }
+        });
+        
+        HBox buttons = new HBox(10, btnNouvelleOffre, btnPublierOffre);
+        pane.getChildren().addAll(buttons, tableView);
         return pane;
     }
     
@@ -471,16 +506,26 @@ public class MainController {
             Button btnPostuler = new Button("Postuler");
             btnPostuler.setOnAction(e -> {
                 Offre selected = tableView.getSelectionModel().getSelectedItem();
-                if (selected != null) {
-                    handlePostuler(selected);
-                    tableView.refresh();
-                } else {
+                if (selected == null) {
                     Alert alert = new Alert(Alert.AlertType.WARNING);
                     alert.setTitle("Sélection");
                     alert.setHeaderText("Aucune offre sélectionnée");
-                    alert.setContentText("Veuillez sélectionner une offre pour postuler");
+                    alert.setContentText("Veuillez sélectionner une offre pour postuler.");
                     alert.showAndWait();
+                    return;
                 }
+
+                // Nouveau flux métier : la candidature se fait depuis l'onglet
+                // \"Journaux & éditions\" afin que l'édition soit cohérente.
+                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                info.setTitle("Postuler à une offre");
+                info.setHeaderText("Utilisez l'onglet \"Journaux & éditions\"");
+                info.setContentText(
+                    "Pour postuler à une offre, veuillez utiliser l'onglet \"Journaux & éditions\".\n\n" +
+                    "Sélectionnez le journal puis l'édition où l'offre a été publiée,\n" +
+                    "puis choisissez l'offre et cliquez sur \"Postuler à l'offre sélectionnée\"."
+                );
+                info.showAndWait();
             });
             
             pane.getChildren().addAll(new Label("Offres disponibles :"), tableView, btnPostuler);
@@ -527,6 +572,111 @@ public class MainController {
         }
         
         return pane;
+    }
+
+    /**
+     * Onglet \"Journaux & éditions\" pour le demandeur :
+     * Journal -> Éditions -> Offres publiées dans l'édition sélectionnée.
+     */
+    private Pane createJournauxPourDemandeurPane() {
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
+
+        Label journauxLabel = new Label("Journaux");
+        TableView<Journal> journauxTable = new TableView<>();
+
+        TableColumn<Journal, String> codeCol = new TableColumn<>("Code");
+        codeCol.setCellValueFactory(new PropertyValueFactory<>("codeJournal"));
+        codeCol.setPrefWidth(100);
+
+        TableColumn<Journal, String> nomCol = new TableColumn<>("Nom");
+        nomCol.setCellValueFactory(new PropertyValueFactory<>("nom"));
+        nomCol.setPrefWidth(200);
+
+        journauxTable.getColumns().addAll(codeCol, nomCol);
+        journauxTable.getItems().addAll(journalRepository.findAll());
+
+        Label editionsLabel = new Label("Éditions");
+        TableView<Edition> editionsTable = new TableView<>();
+
+        TableColumn<Edition, Long> idEditionCol = new TableColumn<>("ID");
+        idEditionCol.setCellValueFactory(new PropertyValueFactory<>("idEdition"));
+        idEditionCol.setPrefWidth(80);
+
+        TableColumn<Edition, Integer> numEditionCol = new TableColumn<>("Numéro");
+        numEditionCol.setCellValueFactory(new PropertyValueFactory<>("numeroEdition"));
+        numEditionCol.setPrefWidth(100);
+
+        TableColumn<Edition, String> dateParutionCol = new TableColumn<>("Date de parution");
+        dateParutionCol.setCellValueFactory(param ->
+            new javafx.beans.property.SimpleStringProperty(param.getValue().getDateParution().toString()));
+        dateParutionCol.setPrefWidth(150);
+
+        editionsTable.getColumns().addAll(idEditionCol, numEditionCol, dateParutionCol);
+
+        Label offresLabel = new Label("Offres publiées dans l'édition sélectionnée");
+        TableView<Offre> offresTable = new TableView<>();
+
+        TableColumn<Offre, String> titreOffreCol = new TableColumn<>("Titre");
+        titreOffreCol.setCellValueFactory(new PropertyValueFactory<>("titre"));
+        titreOffreCol.setPrefWidth(250);
+
+        TableColumn<Offre, String> compOffreCol = new TableColumn<>("Compétences");
+        compOffreCol.setCellValueFactory(new PropertyValueFactory<>("competences"));
+        compOffreCol.setPrefWidth(250);
+
+        offresTable.getColumns().addAll(titreOffreCol, compOffreCol);
+
+        // Quand on sélectionne un journal, charger ses éditions
+        journauxTable.getSelectionModel().selectedItemProperty().addListener((obs, oldJ, newJ) -> {
+            editionsTable.getItems().clear();
+            offresTable.getItems().clear();
+            if (newJ != null) {
+                editionsTable.getItems().addAll(journalService.getEditionsByJournal(newJ.getCodeJournal()));
+            }
+        });
+
+        // Quand on sélectionne une édition, charger les offres publiées
+        editionsTable.getSelectionModel().selectedItemProperty().addListener((obs, oldE, newE) -> {
+            offresTable.getItems().clear();
+            if (newE != null) {
+                var pubs = publicationOffreRepository.findByEditionIdEdition(newE.getIdEdition());
+                pubs.stream()
+                    .map(PublicationOffre::getOffre)
+                    .forEach(offresTable.getItems()::add);
+            }
+        });
+
+        Button btnPostuler = new Button("Postuler à l'offre sélectionnée");
+        btnPostuler.setOnAction(e -> {
+            Offre selectedOffre = offresTable.getSelectionModel().getSelectedItem();
+            Edition selectedEdition = editionsTable.getSelectionModel().getSelectedItem();
+            if (selectedOffre == null || selectedEdition == null) {
+                showWarning("Sélection", "Veuillez sélectionner une édition et une offre.");
+                return;
+            }
+            try {
+                DemandeurEmploi demandeur = (DemandeurEmploi) utilisateurConnecte;
+                candidatureService.postuler(
+                    demandeur.getIdUtilisateur(),
+                    selectedOffre.getIdOffre(),
+                    selectedEdition.getIdEdition()
+                );
+                showInfo("Succès", "Votre candidature a été envoyée avec succès.");
+                updateViewAndScene();
+            } catch (Exception ex) {
+                showError("Erreur lors de la candidature", ex.getMessage());
+            }
+        });
+
+        root.getChildren().addAll(
+            journauxLabel, journauxTable,
+            editionsLabel, editionsTable,
+            offresLabel, offresTable,
+            btnPostuler
+        );
+
+        return root;
     }
     
     private void showNouvelleOffreDialog() {
