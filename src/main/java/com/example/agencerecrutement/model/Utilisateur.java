@@ -12,6 +12,8 @@ import lombok.AllArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+
+
 public abstract class Utilisateur {
     
     @Id

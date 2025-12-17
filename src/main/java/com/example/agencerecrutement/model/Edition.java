@@ -13,6 +13,8 @@ import java.util.List;
 @Table(name = "editions")
 @Data
 @NoArgsConstructor
+
+
 @AllArgsConstructor
 public class Edition {
     

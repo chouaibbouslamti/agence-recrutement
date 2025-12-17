@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 @Entity
 @DiscriminatorValue("ADMINISTRATEUR")
 @Data
+
 @NoArgsConstructor
+
 @EqualsAndHashCode(callSuper = true)
 public class Administrateur extends Utilisateur {
     

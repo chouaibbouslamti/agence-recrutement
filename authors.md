@@ -104,10 +104,10 @@
 
 ## Technologies Maîtrisées par l'Équipe
 
-- **Spring Boot** : Chouaib (Expert), Imane (Avancé)
-- **JavaFX** : Saida (Experte), Hiba (Avancée)
-- **MySQL/JPA** : Imane (Experte), Chouaib (Avancé)
-- **Testing** : Hiba (Spécialiste), Saida (Avancée)
+- **Spring Boot** :
+- **JavaFX** :
+- **MySQL/JPA** :
+- **Testing** :
 
 ## Réalisations Spécifiques par Membre
 

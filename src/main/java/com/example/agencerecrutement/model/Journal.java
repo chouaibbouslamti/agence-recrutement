@@ -12,8 +12,11 @@ import java.util.List;
 @Table(name = "journaux")
 @Data
 @NoArgsConstructor
+
+
 @AllArgsConstructor
-public class Journal {
+public class Journal
+ {
     
     @Id
     @Column(unique = true, nullable = false)

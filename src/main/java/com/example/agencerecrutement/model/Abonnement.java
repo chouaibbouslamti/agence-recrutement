@@ -9,9 +9,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+
 @Entity
 @Table(name = "abonnements")
 @Data
+
+
 @NoArgsConstructor
 @AllArgsConstructor
 public class Abonnement {

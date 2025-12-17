@@ -41,6 +41,7 @@ public class Entreprise extends Utilisateur {
         this.setActif(true);
         this.raisonSociale = raisonSociale;
         this.adresse = adresse;
+        
         this.telephone = telephone;
         this.descriptionActivite = descriptionActivite;
     }

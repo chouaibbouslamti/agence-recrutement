@@ -13,10 +13,13 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Recrutement {
+
+
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idRecrutement;
+    
     
     @Column(nullable = false)
     private LocalDate dateRecrutement;

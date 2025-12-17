@@ -33,7 +33,7 @@ public class DemandeurEmploi extends Utilisateur {
     private String diplome;
     
     @Column
-    private Integer experience; // Nombre d'années d'expérience
+    private Integer experience; // Nombre d'années d'expérience.
     
     @Column
     private Double salaireSouhaite;

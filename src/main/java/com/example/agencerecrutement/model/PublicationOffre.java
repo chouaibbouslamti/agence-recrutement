@@ -14,6 +14,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class PublicationOffre {
     
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idPublication;

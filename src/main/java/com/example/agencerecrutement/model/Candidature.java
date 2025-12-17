@@ -10,6 +10,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "candidatures")
 @Data
+
 @NoArgsConstructor
 @AllArgsConstructor
 public class Candidature {
@@ -31,7 +32,7 @@ public class Candidature {
     
     @ManyToOne
     @JoinColumn(name = "id_edition", nullable = false)
-    private Edition edition; // Édition du journal où le demandeur a découvert l'offre
+    private Edition edition; // Édition du journal: où le demandeur a découvert l'offre
     
     @Override
     public boolean equals(Object o) {

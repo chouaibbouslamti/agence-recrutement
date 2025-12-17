@@ -22,6 +22,7 @@ public class Categorie {
     @Column(unique = true, nullable = false)
     private String libelle;
     
+    
     @OneToMany(mappedBy = "categorie", cascade = CascadeType.ALL)
     private List<Journal> journaux = new ArrayList<>();
 }

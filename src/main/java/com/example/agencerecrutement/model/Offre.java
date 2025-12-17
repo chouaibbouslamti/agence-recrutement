@@ -13,8 +13,10 @@ import java.util.List;
 @Table(name = "offres")
 @Data
 @NoArgsConstructor
+
 @AllArgsConstructor
-public class Offre {
+public class Offre
+ {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

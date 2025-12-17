@@ -9,7 +9,9 @@ import java.util.Optional;
 
 @Repository
 public interface JournalRepository extends JpaRepository<Journal, String> {
+
     Optional<Journal> findByCodeJournal(String codeJournal);
+    
     List<Journal> findByCategorieIdCategorie(Long idCategorie);
 }
 
