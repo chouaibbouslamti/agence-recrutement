@@ -2,19 +2,25 @@ package com.example.agencerecrutement.javafx.controllers;
 
 import com.example.agencerecrutement.javafx.dialogs.InscriptionDialog;
 import com.example.agencerecrutement.model.Utilisateur;
+import com.example.agencerecrutement.repository.UtilisateurRepository;
 import com.example.agencerecrutement.service.AuthentificationService;
 import com.example.agencerecrutement.service.DemandeurEmploiService;
 import com.example.agencerecrutement.service.EntrepriseService;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class LoginController {
@@ -22,21 +28,25 @@ public class LoginController {
     private final AuthentificationService authentificationService;
     private final EntrepriseService entrepriseService;
     private final DemandeurEmploiService demandeurEmploiService;
+    private final UtilisateurRepository utilisateurRepository;
     private ConfigurableApplicationContext applicationContext;
     private Utilisateur utilisateurConnecte;
     
     private VBox root;
-    private TextField loginField;
+    private ComboBox<String> loginCombo;
     private PasswordField passwordField;
     private Label errorLabel;
     private Button loginButton;
+    private ObservableList<String> loginSuggestions;
     
     public LoginController(AuthentificationService authentificationService,
                           EntrepriseService entrepriseService,
-                          DemandeurEmploiService demandeurEmploiService) {
+                          DemandeurEmploiService demandeurEmploiService,
+                          UtilisateurRepository utilisateurRepository) {
         this.authentificationService = authentificationService;
         this.entrepriseService = entrepriseService;
         this.demandeurEmploiService = demandeurEmploiService;
+        this.utilisateurRepository = utilisateurRepository;
         initializeView();
     }
     
@@ -56,13 +66,48 @@ public class LoginController {
         Label subtitleLabel = new Label("Connexion");
         subtitleLabel.setStyle("-fx-font-size: 16px;");
         
-        loginField = new TextField();
-        loginField.setPromptText("Login");
-        loginField.setPrefWidth(250);
+        // Charger les logins existants pour l'autofill
+        loadLoginSuggestions();
+        
+        // Utiliser un ComboBox avec autocomplétion pour le login
+        loginCombo = new ComboBox<>(loginSuggestions);
+        loginCombo.setEditable(true);
+        loginCombo.setPromptText("Login");
+        loginCombo.setPrefWidth(250);
+        loginCombo.setVisibleRowCount(5);
+        
+        // Configurer l'autocomplétion
+        loginCombo.getEditor().textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null || newValue.isEmpty()) {
+                loginCombo.setItems(loginSuggestions);
+            } else {
+                // Filtrer les suggestions basées sur la saisie
+                ObservableList<String> filtered = FXCollections.observableArrayList(
+                    loginSuggestions.stream()
+                        .filter(login -> login.toLowerCase().startsWith(newValue.toLowerCase()))
+                        .collect(Collectors.toList())
+                );
+                loginCombo.setItems(filtered);
+            }
+        });
+        
+        // Permettre la navigation avec les flèches et Enter
+        loginCombo.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER && loginCombo.getSelectionModel().getSelectedItem() != null) {
+                passwordField.requestFocus();
+            }
+        });
         
         passwordField = new PasswordField();
         passwordField.setPromptText("Mot de passe");
         passwordField.setPrefWidth(250);
+        
+        // Permettre la connexion avec Enter dans le champ mot de passe
+        passwordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) {
+                handleLogin();
+            }
+        });
         
         loginButton = new Button("Se connecter");
         loginButton.setPrefWidth(250);
@@ -78,7 +123,19 @@ public class LoginController {
         errorLabel.setTextFill(Color.RED);
         errorLabel.setVisible(false);
         
-        root.getChildren().addAll(titleLabel, subtitleLabel, loginField, passwordField, loginButton, inscriptionButton, errorLabel);
+        root.getChildren().addAll(titleLabel, subtitleLabel, loginCombo, passwordField, loginButton, inscriptionButton, errorLabel);
+    }
+    
+    private void loadLoginSuggestions() {
+        try {
+            List<String> logins = utilisateurRepository.findAll().stream()
+                .map(Utilisateur::getLogin)
+                .collect(Collectors.toList());
+            loginSuggestions = FXCollections.observableArrayList(logins);
+        } catch (Exception e) {
+            // Si erreur, créer une liste vide
+            loginSuggestions = FXCollections.observableArrayList();
+        }
     }
     
     private VBox createNewView() {
@@ -93,9 +150,28 @@ public class LoginController {
         Label subtitleLabel = new Label("Connexion");
         subtitleLabel.setStyle("-fx-font-size: 16px;");
         
-        TextField newLoginField = new TextField();
-        newLoginField.setPromptText("Login");
-        newLoginField.setPrefWidth(250);
+        // Charger les suggestions pour la nouvelle vue
+        loadLoginSuggestions();
+        
+        ComboBox<String> newLoginCombo = new ComboBox<>(loginSuggestions);
+        newLoginCombo.setEditable(true);
+        newLoginCombo.setPromptText("Login");
+        newLoginCombo.setPrefWidth(250);
+        newLoginCombo.setVisibleRowCount(5);
+        
+        // Configurer l'autocomplétion
+        newLoginCombo.getEditor().textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null || newValue.isEmpty()) {
+                newLoginCombo.setItems(loginSuggestions);
+            } else {
+                ObservableList<String> filtered = FXCollections.observableArrayList(
+                    loginSuggestions.stream()
+                        .filter(login -> login.toLowerCase().startsWith(newValue.toLowerCase()))
+                        .collect(Collectors.toList())
+                );
+                newLoginCombo.setItems(filtered);
+            }
+        });
         
         PasswordField newPasswordField = new PasswordField();
         newPasswordField.setPromptText("Mot de passe");
@@ -109,7 +185,7 @@ public class LoginController {
         newLoginButton.setPrefWidth(250);
         newLoginButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 14px;");
         newLoginButton.setOnAction(e -> {
-            String login = newLoginField.getText();
+            String login = newLoginCombo.getEditor().getText();
             String password = newPasswordField.getText();
             
             if (login.isEmpty() || password.isEmpty()) {
@@ -142,7 +218,38 @@ public class LoginController {
         newInscriptionButton.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 14px;");
         newInscriptionButton.setOnAction(e -> handleInscription());
         
-        newRoot.getChildren().addAll(titleLabel, subtitleLabel, newLoginField, newPasswordField, newLoginButton, newInscriptionButton, newErrorLabel);
+        // Permettre la connexion avec Enter
+        newPasswordField.setOnKeyPressed(ev -> {
+            if (ev.getCode() == KeyCode.ENTER) {
+                String login = newLoginCombo.getEditor().getText();
+                String password = newPasswordField.getText();
+                
+                if (login.isEmpty() || password.isEmpty()) {
+                    showErrorInView(newErrorLabel, "Veuillez remplir tous les champs");
+                    return;
+                }
+                
+                try {
+                    utilisateurConnecte = authentificationService.authentifier(login, password);
+                    newErrorLabel.setVisible(false);
+                    
+                    MainController mainController = applicationContext.getBean(MainController.class);
+                    mainController.setUtilisateurConnecte(utilisateurConnecte);
+                    mainController.setApplicationContext(applicationContext);
+                    
+                    Stage stage = (Stage) newPasswordField.getScene().getWindow();
+                    Scene scene = new Scene(mainController.getView(), 1200, 800);
+                    stage.setTitle("Agence de Recrutement - Tableau de bord");
+                    stage.setScene(scene);
+                    stage.setMaximized(true);
+                    
+                } catch (Exception ex) {
+                    showErrorInView(newErrorLabel, ex.getMessage());
+                }
+            }
+        });
+        
+        newRoot.getChildren().addAll(titleLabel, subtitleLabel, newLoginCombo, newPasswordField, newLoginButton, newInscriptionButton, newErrorLabel);
         
         return newRoot;
     }
@@ -153,7 +260,7 @@ public class LoginController {
     }
     
     private void handleLogin() {
-        String login = loginField.getText();
+        String login = loginCombo.getEditor().getText();
         String password = passwordField.getText();
         
         if (login.isEmpty() || password.isEmpty()) {
@@ -233,8 +340,11 @@ public class LoginController {
     public void reset() {
         // Réinitialiser les champs et l'utilisateur connecté
         utilisateurConnecte = null;
-        if (loginField != null) {
-            loginField.clear();
+        // Recharger les suggestions au cas où de nouveaux utilisateurs ont été créés
+        loadLoginSuggestions();
+        if (loginCombo != null) {
+            loginCombo.getEditor().clear();
+            loginCombo.setItems(loginSuggestions);
         }
         if (passwordField != null) {
             passwordField.clear();

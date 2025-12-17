@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import org.hibernate.Hibernate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +55,15 @@ public class Offre {
     }
     
     public int getNbPostesDisponibles() {
-        return nbPostes - recrutements.size();
+        // Éviter les LazyInitializationException lorsque la collection recrutements
+        // est accédée en dehors d'une session Hibernate (par ex. dans JavaFX).
+        if (recrutements == null || !Hibernate.isInitialized(recrutements)) {
+            // Si la collection n'est pas initialisée, on retourne simplement nbPostes.
+            // Le calcul précis (nbPostes - recrutements.size()) sera fait côté service
+            // lorsque la session est encore ouverte.
+            return nbPostes != null ? nbPostes : 0;
+        }
+        return nbPostes != null ? nbPostes - recrutements.size() : 0;
     }
     
     public boolean estActive() {

@@ -91,6 +91,22 @@ public class MainController {
         root.setCenter(content);
     }
     
+    private void updateViewAndScene() {
+        updateView();
+        // Mettre à jour la scène avec le nouveau root
+        Stage stage = null;
+        for (javafx.stage.Window window : javafx.stage.Window.getWindows()) {
+            if (window instanceof Stage && window.isShowing()) {
+                stage = (Stage) window;
+                break;
+            }
+        }
+        if (stage != null && stage.getScene() != null) {
+            Scene scene = stage.getScene();
+            scene.setRoot(root);
+        }
+    }
+    
     private MenuBar createMenuBar() {
         MenuBar menuBar = new MenuBar();
         Menu menuFichier = new Menu("Fichier");
@@ -503,8 +519,9 @@ public class MainController {
                 alert.setHeaderText("Offre créée");
                 alert.setContentText("L'offre a été créée avec succès");
                 alert.showAndWait();
-                // Rafraîchir la vue
-                updateView();
+                
+                // Rafraîchir complètement la vue pour que les nouvelles offres apparaissent
+                updateViewAndScene();
             }
         } catch (Exception ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -529,7 +546,7 @@ public class MainController {
                 alert.setContentText("L'abonnement a été souscrit avec succès");
                 alert.showAndWait();
                 // Rafraîchir la vue
-                updateView();
+                updateViewAndScene();
             }
         } catch (Exception ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -553,7 +570,7 @@ public class MainController {
                 alert.setHeaderText("Candidature envoyée");
                 alert.setContentText("Votre candidature a été envoyée avec succès");
                 alert.showAndWait();
-                updateView();
+                updateViewAndScene();
             }
         } catch (Exception ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -586,7 +603,7 @@ public class MainController {
                 successAlert.setHeaderText("Recrutement effectué");
                 successAlert.setContentText("Le candidat a été recruté avec succès");
                 successAlert.showAndWait();
-                updateView();
+                updateViewAndScene();
             }
         } catch (Exception ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
