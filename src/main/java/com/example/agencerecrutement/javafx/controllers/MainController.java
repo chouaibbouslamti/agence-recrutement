@@ -34,6 +34,7 @@ public class MainController {
     private final RecrutementRepository recrutementRepository;
     private final AbonnementRepository abonnementRepository;
     private final PublicationOffreRepository publicationOffreRepository;
+    private final AuthentificationService authentificationService;
     
     private ConfigurableApplicationContext applicationContext;
     private Utilisateur utilisateurConnecte;
@@ -46,7 +47,7 @@ public class MainController {
                          DemandeurEmploiRepository demandeurEmploiRepository, JournalRepository journalRepository,
                          OffreRepository offreRepository, CandidatureRepository candidatureRepository,
                          RecrutementRepository recrutementRepository, AbonnementRepository abonnementRepository,
-                         PublicationOffreRepository publicationOffreRepository) {
+                         PublicationOffreRepository publicationOffreRepository, AuthentificationService authentificationService) {
         this.entrepriseService = entrepriseService;
         this.offreService = offreService;
         this.candidatureService = candidatureService;
@@ -62,6 +63,7 @@ public class MainController {
         this.recrutementRepository = recrutementRepository;
         this.abonnementRepository = abonnementRepository;
         this.publicationOffreRepository = publicationOffreRepository;
+        this.authentificationService = authentificationService;
         initializeView();
     }
     
@@ -1344,6 +1346,20 @@ public class MainController {
             }
         });
         
+        Button btnModifierMotDePasse = new Button("Modifier mot de passe");
+        btnModifierMotDePasse.setOnAction(e -> {
+            Utilisateur selected = tableView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                ModifierMotDePasseDialog dialog = new ModifierMotDePasseDialog(authentificationService, selected);
+                dialog.showAndWait();
+            } else {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Sélection");
+                alert.setContentText("Veuillez sélectionner un utilisateur");
+                alert.showAndWait();
+            }
+        });
+        
         Button btnDetails = new Button("Détails");
         btnDetails.setOnAction(e -> {
             Utilisateur selected = tableView.getSelectionModel().getSelectedItem();
@@ -1363,7 +1379,7 @@ public class MainController {
             tableView.getItems().addAll(utilisateurRepository.findAll());
         });
         
-        buttonBox.getChildren().addAll(btnActiver, btnDetails, btnRefresh);
+        buttonBox.getChildren().addAll(btnActiver, btnModifierMotDePasse, btnDetails, btnRefresh);
         
         root.getChildren().addAll(title, tableView, buttonBox);
         
