@@ -84,6 +84,29 @@ public class OffreService {
             .orElseThrow(() -> new RuntimeException("Offre introuvable"));
     }
     
+    /**
+     * Suppression logique d'une offre côté métier.
+     * Règles :
+     * - on NE supprime pas une offre qui possède déjà des candidatures, des recrutements
+     *   ou des publications.
+     * - dans ce cas, on demande plutôt de la désactiver.
+     */
+    @Transactional
+    public void supprimerOffre(Long idOffre) {
+        Offre offre = getOffre(idOffre);
+        
+        if (!offre.getCandidatures().isEmpty() ||
+            !offre.getRecrutements().isEmpty() ||
+            !offre.getPublications().isEmpty()) {
+            throw new RuntimeException(
+                "Impossible de supprimer une offre qui possède déjà des candidatures, des recrutements ou des publications. " +
+                "Vous pouvez la désactiver à la place."
+            );
+        }
+        
+        offreRepository.delete(offre);
+    }
+    
     @Transactional
     public void desactiverOffre(Long idOffre) {
         Offre offre = getOffre(idOffre);

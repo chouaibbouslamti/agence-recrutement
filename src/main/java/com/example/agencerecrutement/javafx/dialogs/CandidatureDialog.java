@@ -48,10 +48,20 @@ public class CandidatureDialog extends Dialog<Candidature> {
         
         editionComboBox = new ComboBox<>();
         try {
-            // Charger les éditions (en pratique, vous devriez charger les éditions liées aux publications de l'offre)
-            editionComboBox.setItems(FXCollections.observableArrayList(journalService.getAllJournaux().stream()
+            // Charger les éditions de tous les journaux
+            var editions = journalService.getAllJournaux().stream()
                 .flatMap(j -> journalService.getEditionsByJournal(j.getCodeJournal()).stream())
-                .toList()));
+                .toList();
+            
+            if (editions.isEmpty()) {
+                // Pas d'édition disponible : désactiver le champ et informer l'utilisateur
+                editionComboBox.setDisable(true);
+                editionComboBox.setPromptText("Aucune édition disponible - contactez l'administrateur");
+            } else {
+                editionComboBox.setItems(FXCollections.observableArrayList(editions));
+                editionComboBox.setPromptText("Choisissez l'édition");
+            }
+            
             editionComboBox.setCellFactory(param -> new ListCell<Edition>() {
                 @Override
                 protected void updateItem(Edition edition, boolean empty) {

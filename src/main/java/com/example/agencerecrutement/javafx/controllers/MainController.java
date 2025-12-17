@@ -247,8 +247,23 @@ public class MainController {
         Label title = new Label("Espace Administrateur");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
         
-        Label infoLabel = new Label("Interface administrateur - Fonctionnalités à venir");
-        pane.getChildren().addAll(title, infoLabel);
+        // Onglets ou boutons pour les différentes fonctions admin
+        Button btnGestionUsers = new Button("Gérer les utilisateurs");
+        btnGestionUsers.setOnAction(e -> showGestionUtilisateurs());
+        
+        Button btnGestionJournaux = new Button("Gérer les journaux");
+        btnGestionJournaux.setOnAction(e -> showGestionJournaux());
+        
+        Button btnGestionOffres = new Button("Gérer les offres");
+        btnGestionOffres.setOnAction(e -> showGestionOffresAdmin());
+        
+        Button btnStats = new Button("Statistiques");
+        btnStats.setOnAction(e -> showStatistiques());
+        
+        HBox buttons = new HBox(10, btnGestionUsers, btnGestionJournaux, btnGestionOffres, btnStats);
+        buttons.setPadding(new Insets(10, 0, 0, 0));
+        
+        pane.getChildren().addAll(title, buttons);
         
         return pane;
     }
@@ -670,6 +685,153 @@ public class MainController {
     }
     
     // Méthodes pour les actions d'administration
+    /**
+     * Gestion des offres côté administrateur.
+     * L'admin peut :
+     * - voir toutes les offres
+     * - désactiver une offre
+     * - supprimer une offre (seulement si aucune candidature / recrutement / publication)
+     */
+    private void showGestionOffresAdmin() {
+        Stage stage = new Stage();
+        stage.setTitle("Gestion des offres");
+        
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(20));
+        
+        Label title = new Label("Gestion des offres");
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        
+        TableView<Offre> tableView = new TableView<>();
+        
+        TableColumn<Offre, Long> idCol = new TableColumn<>("ID");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("idOffre"));
+        idCol.setPrefWidth(70);
+        
+        TableColumn<Offre, String> titreCol = new TableColumn<>("Titre");
+        titreCol.setCellValueFactory(new PropertyValueFactory<>("titre"));
+        titreCol.setPrefWidth(200);
+        
+        TableColumn<Offre, String> entrepriseCol = new TableColumn<>("Entreprise");
+        entrepriseCol.setCellValueFactory(param ->
+            new javafx.beans.property.SimpleStringProperty(
+                param.getValue().getEntreprise() != null ? param.getValue().getEntreprise().getRaisonSociale() : ""));
+        entrepriseCol.setPrefWidth(200);
+        
+        TableColumn<Offre, Integer> postesCol = new TableColumn<>("Postes");
+        postesCol.setCellValueFactory(new PropertyValueFactory<>("nbPostes"));
+        postesCol.setPrefWidth(80);
+        
+        TableColumn<Offre, Integer> postesDispCol = new TableColumn<>("Postes dispo.");
+        postesDispCol.setCellValueFactory(param ->
+            new javafx.beans.property.SimpleIntegerProperty(param.getValue().getNbPostesDisponibles()).asObject());
+        postesDispCol.setPrefWidth(100);
+        
+        TableColumn<Offre, String> etatCol = new TableColumn<>("État");
+        etatCol.setCellValueFactory(param ->
+            new javafx.beans.property.SimpleStringProperty(
+                param.getValue().estActive() ? "Active" : "Désactivée"));
+        etatCol.setPrefWidth(100);
+        
+        tableView.getColumns().addAll(idCol, titreCol, entrepriseCol, postesCol, postesDispCol, etatCol);
+        
+        // Charger toutes les offres
+        tableView.getItems().addAll(offreRepository.findAll());
+        
+        HBox buttonBox = new HBox(10);
+        
+        Button btnDesactiver = new Button("Désactiver l'offre");
+        btnDesactiver.setOnAction(e -> {
+            Offre selected = tableView.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showWarning("Sélection", "Veuillez sélectionner une offre");
+                return;
+            }
+            if (!selected.estActive()) {
+                showWarning("État de l'offre", "L'offre est déjà désactivée");
+                return;
+            }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Confirmation");
+            confirm.setHeaderText("Désactiver l'offre");
+            confirm.setContentText("Êtes-vous sûr de vouloir désactiver l'offre \"" + selected.getTitre() + "\" ?");
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                try {
+                    offreService.desactiverOffre(selected.getIdOffre());
+                    tableView.getItems().clear();
+                    tableView.getItems().addAll(offreRepository.findAll());
+                    showInfo("Succès", "Offre désactivée avec succès");
+                    // rafraîchir éventuellement la vue principale
+                    updateViewAndScene();
+                } catch (Exception ex) {
+                    showError("Erreur lors de la désactivation", ex.getMessage());
+                }
+            }
+        });
+        
+        Button btnSupprimer = new Button("Supprimer l'offre");
+        btnSupprimer.setOnAction(e -> {
+            Offre selected = tableView.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showWarning("Sélection", "Veuillez sélectionner une offre");
+                return;
+            }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Confirmation");
+            confirm.setHeaderText("Supprimer l'offre");
+            confirm.setContentText("Êtes-vous sûr de vouloir supprimer l'offre \"" + selected.getTitre() + "\" ?\n\n" +
+                                   "Attention : cette action est définitive.");
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                try {
+                    offreService.supprimerOffre(selected.getIdOffre());
+                    tableView.getItems().remove(selected);
+                    showInfo("Succès", "Offre supprimée avec succès");
+                    updateViewAndScene();
+                } catch (Exception ex) {
+                    showError("Suppression impossible", ex.getMessage());
+                }
+            }
+        });
+        
+        Button btnRefresh = new Button("Actualiser");
+        btnRefresh.setOnAction(e -> {
+            tableView.getItems().clear();
+            tableView.getItems().addAll(offreRepository.findAll());
+        });
+        
+        buttonBox.getChildren().addAll(btnDesactiver, btnSupprimer, btnRefresh);
+        
+        root.getChildren().addAll(title, tableView, buttonBox);
+        
+        Scene scene = new Scene(root, 900, 600);
+        stage.setScene(scene);
+        stage.show();
+    }
+    
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
+    private void showWarning(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
+    private void showError(String header, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Erreur");
+        alert.setHeaderText(header);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
     private void showGestionUtilisateurs() {
         Stage stage = new Stage();
         stage.setTitle("Gestion des utilisateurs");
