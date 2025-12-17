@@ -13,6 +13,7 @@ import javafx.stage.Stage;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Component
@@ -193,6 +194,9 @@ public class MainController {
         Label title = new Label("Espace Entreprise");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
         
+        Button btnEditCoordonnees = new Button("Modifier mes coordonnées");
+        btnEditCoordonnees.setOnAction(e -> showEditEntrepriseCoordonneesDialog());
+        
         TabPane tabPane = new TabPane();
         
         Tab tabOffres = new Tab("Mes Offres");
@@ -213,7 +217,7 @@ public class MainController {
         
         tabPane.getTabs().addAll(tabOffres, tabAbonnements, tabCandidatures, tabRecrutements);
         
-        pane.getChildren().addAll(title, tabPane);
+        pane.getChildren().addAll(title, btnEditCoordonnees, tabPane);
         return pane;
     }
     
@@ -223,6 +227,9 @@ public class MainController {
         
         Label title = new Label("Espace Demandeur d'Emploi");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        
+        Button btnEditCoordonnees = new Button("Modifier mes coordonnées");
+        btnEditCoordonnees.setOnAction(e -> showEditDemandeurCoordonneesDialog());
         
         TabPane tabPane = new TabPane();
         
@@ -236,7 +243,7 @@ public class MainController {
         
         tabPane.getTabs().addAll(tabOffres, tabMesCandidatures);
         
-        pane.getChildren().addAll(title, tabPane);
+        pane.getChildren().addAll(title, btnEditCoordonnees, tabPane);
         return pane;
     }
     
@@ -832,6 +839,150 @@ public class MainController {
         alert.showAndWait();
     }
     
+    /**
+     * Dialog pour permettre à une entreprise de modifier ses coordonnées.
+     */
+    private void showEditEntrepriseCoordonneesDialog() {
+        if (!(utilisateurConnecte instanceof Entreprise)) {
+            showError("Accès refusé", "Cette fonctionnalité est réservée aux entreprises.");
+            return;
+        }
+        Entreprise entreprise = (Entreprise) utilisateurConnecte;
+        
+        Dialog<Entreprise> dialog = new Dialog<>();
+        dialog.setTitle("Modifier mes coordonnées");
+        dialog.setHeaderText("Modifier les coordonnées de l'entreprise");
+        
+        ButtonType saveButtonType = new ButtonType("Enregistrer", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
+        
+        TextField raisonSocialeField = new TextField(entreprise.getRaisonSociale());
+        TextField adresseField = new TextField(entreprise.getAdresse());
+        TextField telephoneField = new TextField(entreprise.getTelephone());
+        TextArea descriptionArea = new TextArea(entreprise.getDescriptionActivite());
+        descriptionArea.setPrefRowCount(3);
+        
+        grid.add(new Label("Raison sociale :"), 0, 0);
+        grid.add(raisonSocialeField, 1, 0);
+        grid.add(new Label("Adresse :"), 0, 1);
+        grid.add(adresseField, 1, 1);
+        grid.add(new Label("Téléphone :"), 0, 2);
+        grid.add(telephoneField, 1, 2);
+        grid.add(new Label("Description :"), 0, 3);
+        grid.add(descriptionArea, 1, 3);
+        
+        dialog.getDialogPane().setContent(grid);
+        
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == saveButtonType) {
+                entreprise.setRaisonSociale(raisonSocialeField.getText().trim());
+                entreprise.setAdresse(adresseField.getText().trim());
+                entreprise.setTelephone(telephoneField.getText().trim());
+                entreprise.setDescriptionActivite(descriptionArea.getText().trim());
+                try {
+                    entrepriseRepository.save(entreprise);
+                    return entreprise;
+                } catch (Exception e) {
+                    showError("Erreur lors de la mise à jour", e.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+        
+        java.util.Optional<Entreprise> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            showInfo("Succès", "Vos coordonnées ont été mises à jour.");
+            updateViewAndScene();
+        }
+    }
+    
+    /**
+     * Dialog pour permettre à un demandeur d'emploi de modifier ses coordonnées.
+     */
+    private void showEditDemandeurCoordonneesDialog() {
+        if (!(utilisateurConnecte instanceof DemandeurEmploi)) {
+            showError("Accès refusé", "Cette fonctionnalité est réservée aux demandeurs d'emploi.");
+            return;
+        }
+        DemandeurEmploi demandeur = (DemandeurEmploi) utilisateurConnecte;
+        
+        Dialog<DemandeurEmploi> dialog = new Dialog<>();
+        dialog.setTitle("Modifier mes coordonnées");
+        dialog.setHeaderText("Modifier vos coordonnées");
+        
+        ButtonType saveButtonType = new ButtonType("Enregistrer", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
+        
+        TextField nomField = new TextField(demandeur.getNom());
+        TextField prenomField = new TextField(demandeur.getPrenom());
+        TextField adresseField = new TextField(demandeur.getAdresse());
+        TextField telephoneField = new TextField(demandeur.getTelephone());
+        TextField faxField = new TextField(demandeur.getFax());
+        TextField diplomeField = new TextField(demandeur.getDiplome());
+        Spinner<Integer> experienceSpinner = new Spinner<>(0, 50,
+            demandeur.getExperience() != null ? demandeur.getExperience() : 0, 1);
+        Spinner<Double> salaireSpinner = new Spinner<>(0.0, 1000000.0,
+            demandeur.getSalaireSouhaite() != null ? demandeur.getSalaireSouhaite() : 0.0, 100.0);
+        salaireSpinner.setEditable(true);
+        
+        grid.add(new Label("Nom :"), 0, 0);
+        grid.add(nomField, 1, 0);
+        grid.add(new Label("Prénom :"), 0, 1);
+        grid.add(prenomField, 1, 1);
+        grid.add(new Label("Adresse :"), 0, 2);
+        grid.add(adresseField, 1, 2);
+        grid.add(new Label("Téléphone :"), 0, 3);
+        grid.add(telephoneField, 1, 3);
+        grid.add(new Label("Fax :"), 0, 4);
+        grid.add(faxField, 1, 4);
+        grid.add(new Label("Diplôme :"), 0, 5);
+        grid.add(diplomeField, 1, 5);
+        grid.add(new Label("Expérience (années) :"), 0, 6);
+        grid.add(experienceSpinner, 1, 6);
+        grid.add(new Label("Salaire souhaité :"), 0, 7);
+        grid.add(salaireSpinner, 1, 7);
+        
+        dialog.getDialogPane().setContent(grid);
+        
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == saveButtonType) {
+                demandeur.setNom(nomField.getText().trim());
+                demandeur.setPrenom(prenomField.getText().trim());
+                demandeur.setAdresse(adresseField.getText().trim());
+                demandeur.setTelephone(telephoneField.getText().trim());
+                demandeur.setFax(faxField.getText().trim());
+                demandeur.setDiplome(diplomeField.getText().trim());
+                demandeur.setExperience(experienceSpinner.getValue());
+                demandeur.setSalaireSouhaite(salaireSpinner.getValue());
+                try {
+                    demandeurEmploiRepository.save(demandeur);
+                    return demandeur;
+                } catch (Exception e) {
+                    showError("Erreur lors de la mise à jour", e.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+        
+        java.util.Optional<DemandeurEmploi> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            showInfo("Succès", "Vos coordonnées ont été mises à jour.");
+            updateViewAndScene();
+        }
+    }
+    
     private void showGestionUtilisateurs() {
         Stage stage = new Stage();
         stage.setTitle("Gestion des utilisateurs");
@@ -968,16 +1119,16 @@ public class MainController {
     
     private void showGestionJournaux() {
         Stage stage = new Stage();
-        stage.setTitle("Gestion des journaux");
+        stage.setTitle("Gestion des journaux et éditions");
         
         VBox root = new VBox(10);
         root.setPadding(new Insets(20));
         
-        Label title = new Label("Gestion des journaux");
+        Label title = new Label("Gestion des journaux et de leurs éditions");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
         
         // TableView pour afficher les journaux
-        TableView<Journal> tableView = new TableView<>();
+        TableView<Journal> journauxTable = new TableView<>();
         
         TableColumn<Journal, String> codeCol = new TableColumn<>("Code");
         codeCol.setCellValueFactory(new PropertyValueFactory<>("codeJournal"));
@@ -1001,20 +1152,49 @@ public class MainController {
             new javafx.beans.property.SimpleStringProperty(param.getValue().getCategorie().getLibelle()));
         categorieCol.setPrefWidth(150);
         
-        tableView.getColumns().addAll(codeCol, nomCol, periodiciteCol, langueCol, categorieCol);
+        journauxTable.getColumns().addAll(codeCol, nomCol, periodiciteCol, langueCol, categorieCol);
         
         // Charger les journaux
         List<Journal> journaux = journalRepository.findAll();
-        tableView.getItems().addAll(journaux);
+        journauxTable.getItems().addAll(journaux);
+        
+        // TableView pour afficher les éditions du journal sélectionné
+        Label editionsTitle = new Label("Éditions du journal sélectionné");
+        editionsTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        
+        TableView<Edition> editionsTable = new TableView<>();
+        
+        TableColumn<Edition, Long> idEditionCol = new TableColumn<>("ID");
+        idEditionCol.setCellValueFactory(new PropertyValueFactory<>("idEdition"));
+        idEditionCol.setPrefWidth(80);
+        
+        TableColumn<Edition, Integer> numEditionCol = new TableColumn<>("Numéro");
+        numEditionCol.setCellValueFactory(new PropertyValueFactory<>("numeroEdition"));
+        numEditionCol.setPrefWidth(100);
+        
+        TableColumn<Edition, String> dateParutionCol = new TableColumn<>("Date de parution");
+        dateParutionCol.setCellValueFactory(param ->
+            new javafx.beans.property.SimpleStringProperty(param.getValue().getDateParution().toString()));
+        dateParutionCol.setPrefWidth(150);
+        
+        editionsTable.getColumns().addAll(idEditionCol, numEditionCol, dateParutionCol);
+        
+        // Quand on sélectionne un journal, charger ses éditions
+        journauxTable.getSelectionModel().selectedItemProperty().addListener((obs, oldJournal, newJournal) -> {
+            editionsTable.getItems().clear();
+            if (newJournal != null) {
+                editionsTable.getItems().addAll(journalService.getEditionsByJournal(newJournal.getCodeJournal()));
+            }
+        });
         
         // Boutons d'action
         HBox buttonBox = new HBox(10);
         Button btnNouveau = new Button("Nouveau journal");
-        btnNouveau.setOnAction(e -> showNouveauJournalDialog(tableView));
+        btnNouveau.setOnAction(e -> showNouveauJournalDialog(journauxTable));
         
-        Button btnSupprimer = new Button("Supprimer");
+        Button btnSupprimer = new Button("Supprimer journal");
         btnSupprimer.setOnAction(e -> {
-            Journal selected = tableView.getSelectionModel().getSelectedItem();
+            Journal selected = journauxTable.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
                 confirm.setTitle("Confirmation");
@@ -1023,7 +1203,8 @@ public class MainController {
                 if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
                     try {
                         journalRepository.delete(selected);
-                        tableView.getItems().remove(selected);
+                        journauxTable.getItems().remove(selected);
+                        editionsTable.getItems().clear();
                         Alert success = new Alert(Alert.AlertType.INFORMATION);
                         success.setTitle("Succès");
                         success.setContentText("Journal supprimé avec succès");
@@ -1043,19 +1224,86 @@ public class MainController {
             }
         });
         
-        Button btnRefresh = new Button("Actualiser");
-        btnRefresh.setOnAction(e -> {
-            tableView.getItems().clear();
-            tableView.getItems().addAll(journalRepository.findAll());
+        Button btnNouvelleEdition = new Button("Nouvelle édition");
+        btnNouvelleEdition.setOnAction(e -> {
+            Journal selected = journauxTable.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Sélection");
+                alert.setContentText("Veuillez sélectionner un journal pour créer une édition");
+                alert.showAndWait();
+                return;
+            }
+            showNouvelleEditionDialog(selected, editionsTable);
         });
         
-        buttonBox.getChildren().addAll(btnNouveau, btnSupprimer, btnRefresh);
+        Button btnRefresh = new Button("Actualiser");
+        btnRefresh.setOnAction(e -> {
+            journauxTable.getItems().clear();
+            journauxTable.getItems().addAll(journalRepository.findAll());
+            editionsTable.getItems().clear();
+        });
         
-        root.getChildren().addAll(title, tableView, buttonBox);
+        buttonBox.getChildren().addAll(btnNouveau, btnSupprimer, btnNouvelleEdition, btnRefresh);
         
-        Scene scene = new Scene(root, 800, 600);
+        root.getChildren().addAll(title, journauxTable, buttonBox, editionsTitle, editionsTable);
+        
+        Scene scene = new Scene(root, 900, 650);
         stage.setScene(scene);
         stage.show();
+    }
+
+    private void showNouvelleEditionDialog(Journal journal, TableView<Edition> editionsTable) {
+        Dialog<Edition> dialog = new Dialog<>();
+        dialog.setTitle("Nouvelle édition");
+        dialog.setHeaderText("Créer une nouvelle édition pour le journal \"" + journal.getNom() + "\"");
+        
+        ButtonType createButtonType = new ButtonType("Créer", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(createButtonType, ButtonType.CANCEL);
+        
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
+        
+        Spinner<Integer> numeroSpinner = new Spinner<>(1, 1000, 1, 1);
+        DatePicker datePicker = new DatePicker(LocalDate.now());
+        
+        grid.add(new Label("Numéro d'édition:"), 0, 0);
+        grid.add(numeroSpinner, 1, 0);
+        grid.add(new Label("Date de parution:"), 0, 1);
+        grid.add(datePicker, 1, 1);
+        
+        dialog.getDialogPane().setContent(grid);
+        
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == createButtonType) {
+                try {
+                    Edition edition = journalService.creerEdition(
+                        journal.getCodeJournal(),
+                        numeroSpinner.getValue(),
+                        datePicker.getValue()
+                    );
+                    return edition;
+                } catch (Exception e) {
+                    Alert error = new Alert(Alert.AlertType.ERROR);
+                    error.setTitle("Erreur");
+                    error.setContentText("Erreur lors de la création de l'édition: " + e.getMessage());
+                    error.showAndWait();
+                    return null;
+                }
+            }
+            return null;
+        });
+        
+        java.util.Optional<Edition> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            editionsTable.getItems().add(result.get());
+            Alert success = new Alert(Alert.AlertType.INFORMATION);
+            success.setTitle("Succès");
+            success.setContentText("Édition créée avec succès");
+            success.showAndWait();
+        }
     }
     
     private void showNouveauJournalDialog(TableView<Journal> tableView) {
