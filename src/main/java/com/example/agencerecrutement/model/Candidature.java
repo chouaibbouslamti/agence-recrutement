@@ -22,6 +22,13 @@ public class Candidature {
     @Column(nullable = false)
     private LocalDate dateCandidature;
     
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private StatutCandidature statut = StatutCandidature.EN_ATTENTE;
+    
+    @Column(nullable = false)
+    private boolean notifiee = false;
+    
     @ManyToOne
     @JoinColumn(name = "id_demandeur", nullable = false)
     private DemandeurEmploi demandeur;
@@ -33,6 +40,13 @@ public class Candidature {
     @ManyToOne
     @JoinColumn(name = "id_edition", nullable = false)
     private Edition edition; // Édition du journal: où le demandeur a découvert l'offre
+    
+    public enum StatutCandidature {
+        EN_ATTENTE,
+        APPROUVEE,
+        REJETEE,
+        RECRUTEE
+    }
     
     @Override
     public boolean equals(Object o) {

@@ -21,6 +21,14 @@ import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.List;
 
+// Imports pour la génération d'images
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+
 @Component
 public class MainController {
     
@@ -147,13 +155,15 @@ public class MainController {
             MenuItem itemGestionUsers = new MenuItem("Gérer les utilisateurs");
             MenuItem itemGestionJournaux = new MenuItem("Gérer les journaux");
             MenuItem itemStats = new MenuItem("Statistiques");
+            MenuItem itemRapports = new MenuItem("Rapports de recrutement");
             
             // Ajouter les actions pour les boutons d'administration
             itemGestionUsers.setOnAction(e -> showGestionUtilisateurs());
             itemGestionJournaux.setOnAction(e -> showGestionJournaux());
             itemStats.setOnAction(e -> showStatistiques());
+            itemRapports.setOnAction(e -> showRapportsRecrutement());
             
-            menuAdmin.getItems().addAll(itemGestionUsers, itemGestionJournaux, itemStats);
+            menuAdmin.getItems().addAll(itemGestionUsers, itemGestionJournaux, itemStats, itemRapports);
             menuBar.getMenus().add(menuAdmin);
         } else if (utilisateurConnecte.getRole() == Utilisateur.Role.DEMANDEUR_EMPLOI) {
             Menu menuDemandeur = new Menu("Mes Documents");
@@ -322,7 +332,10 @@ public class MainController {
         Button btnStats = new Button("Statistiques");
         btnStats.setOnAction(e -> showStatistiques());
         
-        HBox buttons = new HBox(10, btnGestionUsers, btnGestionJournaux, btnGestionOffres, btnStats);
+        Button btnRapports = new Button("Rapports de recrutement");
+        btnRapports.setOnAction(e -> showRapportsRecrutement());
+        
+        HBox buttons = new HBox(10, btnGestionUsers, btnGestionJournaux, btnGestionOffres, btnStats, btnRapports);
         buttons.setPadding(new Insets(10, 0, 0, 0));
         
         pane.getChildren().addAll(title, buttons);
@@ -622,26 +635,134 @@ public class MainController {
         try {
             DemandeurEmploi demandeur = (DemandeurEmploi) utilisateurConnecte;
             
+            // Section des statistiques des candidatures
+            HBox statsBox = new HBox(20);
+            statsBox.setPadding(new Insets(10));
+            statsBox.setStyle("-fx-background-color: #f8f9fa; -fx-border-radius: 8px; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
+            
+            // Calculer les statistiques
+            List<Candidature> toutesCandidatures = candidatureService.getCandidaturesByDemandeur(demandeur.getIdUtilisateur());
+            long enAttente = toutesCandidatures.stream().filter(c -> c.getStatut() == Candidature.StatutCandidature.EN_ATTENTE).count();
+            long approuvees = toutesCandidatures.stream().filter(c -> c.getStatut() == Candidature.StatutCandidature.APPROUVEE).count();
+            long rejetees = toutesCandidatures.stream().filter(c -> c.getStatut() == Candidature.StatutCandidature.REJETEE).count();
+            long recrutees = toutesCandidatures.stream().filter(c -> c.getStatut() == Candidature.StatutCandidature.RECRUTEE).count();
+            
+            VBox statsLeft = new VBox(10);
+            statsLeft.getChildren().addAll(
+                createStatCard("En Attente", String.valueOf(enAttente), "#f39c12"),
+                createStatCard("Approuvées", String.valueOf(approuvees), "#28a745")
+            );
+            
+            VBox statsRight = new VBox(10);
+            statsRight.getChildren().addAll(
+                createStatCard("Rejetées", String.valueOf(rejetees), "#dc3545"),
+                createStatCard("Recrutées", String.valueOf(recrutees), "#17a2b8")
+            );
+            
+            statsBox.getChildren().addAll(statsLeft, statsRight);
+            
+            // Tableau des candidatures détaillées
+            Label titleLabel = new Label("Détail de mes candidatures :");
+            titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #34495e;");
+            
             TableView<Candidature> tableView = new TableView<>();
+            tableView.setPrefHeight(300);
             
             TableColumn<Candidature, String> offreCol = new TableColumn<>("Offre");
             offreCol.setCellValueFactory(param -> 
                 new javafx.beans.property.SimpleStringProperty(param.getValue().getOffre().getTitre()));
+            offreCol.setPrefWidth(250);
+            
+            TableColumn<Candidature, String> entrepriseCol = new TableColumn<>("Entreprise");
+            entrepriseCol.setCellValueFactory(param -> 
+                new javafx.beans.property.SimpleStringProperty(param.getValue().getOffre().getEntreprise().getRaisonSociale()));
+            entrepriseCol.setPrefWidth(180);
             
             TableColumn<Candidature, String> dateCol = new TableColumn<>("Date");
             dateCol.setCellValueFactory(param -> 
                 new javafx.beans.property.SimpleStringProperty(param.getValue().getDateCandidature().toString()));
+            dateCol.setPrefWidth(120);
             
-            TableColumn<Candidature, String> etatCol = new TableColumn<>("État");
-            etatCol.setCellValueFactory(param -> 
+            TableColumn<Candidature, String> statutCol = new TableColumn<>("Statut");
+            statutCol.setCellValueFactory(param -> 
                 new javafx.beans.property.SimpleStringProperty(
-                    param.getValue().getOffre().estActive() ? "Active" : "Désactivée"));
+                    getStatutCandidatureDisplay(param.getValue().getStatut())
+                )
+            );
+            statutCol.setPrefWidth(120);
             
-            tableView.getColumns().addAll(offreCol, dateCol, etatCol);
+            // Personnaliser l'apparence selon le statut
+            statutCol.setCellFactory(column -> new TableCell<Candidature, String>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty || item == null) {
+                        setText(null);
+                        setStyle("");
+                    } else {
+                        setText(item);
+                        Candidature.StatutCandidature statut = getTableView().getItems().get(getIndex()).getStatut();
+                        setStyle(getStatutStyle(statut));
+                    }
+                }
+            });
             
-            tableView.getItems().addAll(candidatureService.getCandidaturesByDemandeur(demandeur.getIdUtilisateur()));
+            TableColumn<Candidature, Void> actionsCol = new TableColumn<>("Actions");
+            actionsCol.setPrefWidth(100);
+            actionsCol.setCellFactory(param -> new TableCell<Candidature, Void>() {
+                private final Button btnDetails = new Button("Détails");
+                
+                {
+                    btnDetails.setStyle("-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-size: 11px; -fx-padding: 4px 8px; -fx-background-radius: 3px;");
+                    btnDetails.setOnAction(event -> {
+                        Candidature candidature = getTableView().getItems().get(getIndex());
+                        showDetailsCandidature(candidature);
+                    });
+                }
+                
+                @Override
+                protected void updateItem(Void item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty) {
+                        setGraphic(null);
+                    } else {
+                        setGraphic(btnDetails);
+                    }
+                }
+            });
             
-            pane.getChildren().addAll(new Label("Mes candidatures :"), tableView);
+            tableView.getColumns().addAll(offreCol, entrepriseCol, dateCol, statutCol, actionsCol);
+            
+            // Charger les candidatures avec leurs relations
+            List<Candidature> candidatures = candidatureService.getCandidaturesWithRelations(demandeur.getIdUtilisateur());
+            tableView.getItems().addAll(candidatures);
+            
+            // Notification pour les nouvelles candidatures approuvées
+            List<Candidature> nouvellesApprouvees = candidatures.stream()
+                .filter(c -> c.getStatut() == Candidature.StatutCandidature.APPROUVEE)
+                .filter(c -> !c.isNotifiee())
+                .collect(java.util.stream.Collectors.toList());
+            
+            if (!nouvellesApprouvees.isEmpty()) {
+                HBox notificationBox = new HBox(10);
+                notificationBox.setStyle("-fx-background-color: #d4edda; -fx-border-color: #c3e6cb; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-padding: 10px;");
+                notificationBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                
+                Label notificationIcon = new Label("🎉");
+                notificationIcon.setStyle("-fx-font-size: 16px;");
+                
+                Label notificationText = new Label("Félicitations ! Vous avez " + nouvellesApprouvees.size() + " candidature(s) approuvée(s).");
+                notificationText.setStyle("-fx-font-weight: bold; -fx-text-fill: #155724;");
+                
+                Button btnMarquerLues = new Button("Marquer comme lues");
+                btnMarquerLues.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 11px; -fx-padding: 5px 10px; -fx-background-radius: 3px;");
+                btnMarquerLues.setOnAction(e -> marquerCandidaturesCommeLues(nouvellesApprouvees));
+                
+                notificationBox.getChildren().addAll(notificationIcon, notificationText, btnMarquerLues);
+                pane.getChildren().add(notificationBox);
+            }
+            
+            pane.getChildren().addAll(statsBox, titleLabel, tableView);
             
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -2232,7 +2353,539 @@ public class MainController {
         alert.showAndWait();
     }
     
-    // ========== GESTION DEMANDEUR - TÉLÉCHARGEMENT CV ==========
+    // ========== GESTION ADMIN - RAPPORTS RECRUTEMENT ==========
+    
+    public void showRapportsRecrutement() {
+        if (utilisateurConnecte instanceof Administrateur) {
+            Stage stage = new Stage();
+            stage.setTitle("Rapports de Recrutement");
+            
+            VBox root = new VBox(20);
+            root.setPadding(new Insets(20));
+            
+            // Titre principal
+            Label titleLabel = new Label("Tableau de Bord - Recrutements et Offres");
+            titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+            
+            // Section des statistiques générales
+            HBox statsBox = new HBox(20);
+            statsBox.setPadding(new Insets(15));
+            statsBox.setStyle("-fx-background-color: #f8f9fa; -fx-border-radius: 8px; -fx-border-color: #dee2e6; -fx-border-width: 1px;");
+            
+            // Calculer les statistiques
+            long totalOffres = offreRepository.count();
+            long offresActives = offreRepository.findByEtat(Offre.EtatOffre.ACTIVE).size();
+            long totalRecrutements = recrutementRepository.count();
+            long recrutementsActifs = recrutementRepository.findAll().stream().filter(r -> r.getDateRecrutement() != null).count();
+            
+            VBox statsLeft = new VBox(10);
+            statsLeft.getChildren().addAll(
+                createStatCard("Total Offres", String.valueOf(totalOffres), "#3498db"),
+                createStatCard("Offres Actives", String.valueOf(offresActives), "#2ecc71")
+            );
+            
+            VBox statsRight = new VBox(10);
+            statsRight.getChildren().addAll(
+                createStatCard("Total Recrutements", String.valueOf(totalRecrutements), "#9b59b6"),
+                createStatCard("Recrutements Actifs", String.valueOf(recrutementsActifs), "#e74c3c")
+            );
+            
+            statsBox.getChildren().addAll(statsLeft, statsRight);
+            
+            // Tableau des recrutements
+            Label recrutementsTitle = new Label("Recrutements en Cours");
+            recrutementsTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #34495e;");
+            
+            TableView<Recrutement> tableRecrutements = new TableView<>();
+            tableRecrutements.setPrefHeight(200);
+            
+            TableColumn<Recrutement, String> colOffre = new TableColumn<>("Offre");
+            colOffre.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getOffre().getTitre()
+                )
+            );
+            colOffre.setPrefWidth(200);
+            
+            TableColumn<Recrutement, String> colEntreprise = new TableColumn<>("Entreprise");
+            colEntreprise.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getEntreprise().getRaisonSociale()
+                )
+            );
+            colEntreprise.setPrefWidth(150);
+            
+            TableColumn<Recrutement, String> colCandidat = new TableColumn<>("Candidat Recruté");
+            colCandidat.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getNom() + " " + 
+                    cellData.getValue().getDemandeur().getPrenom()
+                )
+            );
+            colCandidat.setPrefWidth(180);
+            
+            TableColumn<Recrutement, String> colDate = new TableColumn<>("Date Recrutement");
+            colDate.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDateRecrutement().toString()
+                )
+            );
+            colDate.setPrefWidth(120);
+            
+            tableRecrutements.getColumns().addAll(colOffre, colEntreprise, colCandidat, colDate);
+            
+            // Charger les recrutements avec leurs relations initialisées
+            List<Recrutement> recrutements = recrutementRepository.findAllWithRelations();
+            tableRecrutements.getItems().addAll(recrutements);
+            
+            // Tableau des offres publiées
+            Label offresTitle = new Label("Offres Publiées par Entreprise");
+            offresTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #34495e;");
+            
+            TableView<Offre> tableOffres = new TableView<>();
+            tableOffres.setPrefHeight(200);
+            
+            TableColumn<Offre, String> colTitreOffre = new TableColumn<>("Titre");
+            colTitreOffre.setCellValueFactory(new PropertyValueFactory<>("titre"));
+            colTitreOffre.setPrefWidth(200);
+            
+            TableColumn<Offre, String> colNomEntreprise = new TableColumn<>("Entreprise");
+            colNomEntreprise.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getEntreprise().getRaisonSociale()
+                )
+            );
+            colNomEntreprise.setPrefWidth(150);
+            
+            TableColumn<Offre, String> colDatePublication = new TableColumn<>("Date Publication");
+            colDatePublication.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    "N/A"
+                )
+            );
+            colDatePublication.setPrefWidth(120);
+            
+            TableColumn<Offre, String> colEtatOffre = new TableColumn<>("État");
+            colEtatOffre.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getEtat().toString()
+                )
+            );
+            colEtatOffre.setPrefWidth(100);
+            
+            TableColumn<Offre, Integer> colNbCandidats = new TableColumn<>("Candidats");
+            colNbCandidats.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleIntegerProperty(
+                    (int) candidatureRepository.countByOffre(cellData.getValue().getIdOffre())
+                ).asObject()
+            );
+            colNbCandidats.setPrefWidth(80);
+            
+            tableOffres.getColumns().addAll(colTitreOffre, colNomEntreprise, colDatePublication, colEtatOffre, colNbCandidats);
+            
+            // Charger les offres avec leurs relations initialisées
+            List<Offre> offres = offreRepository.findAllWithEntreprise();
+            tableOffres.getItems().addAll(offres);
+            
+            // Bouton de téléchargement du rapport
+            Button btnDownloadRapport = new Button("📊 Télécharger le Rapport (Image)");
+            btnDownloadRapport.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 10px 20px; -fx-background-radius: 5px;");
+            btnDownloadRapport.setOnAction(e -> generateAndDownloadRapportImage(recrutements, offres));
+            
+            // Bouton d'actualisation
+            Button btnRefresh = new Button("🔄 Actualiser");
+            btnRefresh.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-font-size: 12px; -fx-padding: 8px 15px; -fx-background-radius: 4px;");
+            btnRefresh.setOnAction(e -> {
+                tableRecrutements.getItems().clear();
+                tableRecrutements.getItems().addAll(recrutementRepository.findAll());
+                
+                tableOffres.getItems().clear();
+                tableOffres.getItems().addAll(offreRepository.findAll());
+            });
+            
+            // Boîte de boutons
+            HBox buttonBox = new HBox(15);
+            buttonBox.setAlignment(javafx.geometry.Pos.CENTER);
+            buttonBox.getChildren().addAll(btnRefresh, btnDownloadRapport);
+            
+            root.getChildren().addAll(titleLabel, statsBox, recrutementsTitle, tableRecrutements, 
+                                   offresTitle, tableOffres, buttonBox);
+            
+            Scene scene = new Scene(root, 1000, 800);
+            stage.setScene(scene);
+            stage.show();
+        }
+    }
+    
+    private VBox createStatCard(String title, String value, String color) {
+        VBox card = new VBox(8);
+        card.setPadding(new Insets(12));
+        card.setPrefWidth(120);
+        card.setStyle("-fx-background-color: white; -fx-border-radius: 6px; -fx-border-color: " + color + "; -fx-border-width: 2px; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 0);");
+        
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #7f8c8d; -fx-font-weight: 500;");
+        
+        Label valueLabel = new Label(value);
+        valueLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+        
+        card.getChildren().addAll(titleLabel, valueLabel);
+        return card;
+    }
+    
+    private String getStatutCandidatureDisplay(Candidature.StatutCandidature statut) {
+        switch (statut) {
+            case EN_ATTENTE:
+                return "En attente";
+            case APPROUVEE:
+                return "Approuvée";
+            case REJETEE:
+                return "Rejetée";
+            case RECRUTEE:
+                return "Recrutée";
+            default:
+                return statut.toString();
+        }
+    }
+    
+    private String getStatutStyle(Candidature.StatutCandidature statut) {
+        switch (statut) {
+            case EN_ATTENTE:
+                return "-fx-background-color: #fff3cd; -fx-text-fill: #856404; -fx-font-weight: bold; -fx-padding: 4px 8px; -fx-background-radius: 4px;";
+            case APPROUVEE:
+                return "-fx-background-color: #d4edda; -fx-text-fill: #155724; -fx-font-weight: bold; -fx-padding: 4px 8px; -fx-background-radius: 4px;";
+            case REJETEE:
+                return "-fx-background-color: #f8d7da; -fx-text-fill: #721c24; -fx-font-weight: bold; -fx-padding: 4px 8px; -fx-background-radius: 4px;";
+            case RECRUTEE:
+                return "-fx-background-color: #d1ecf1; -fx-text-fill: #0c5460; -fx-font-weight: bold; -fx-padding: 4px 8px; -fx-background-radius: 4px;";
+            default:
+                return "-fx-background-color: #e2e3e5; -fx-text-fill: #6c757d; -fx-font-weight: bold; -fx-padding: 4px 8px; -fx-background-radius: 4px;";
+        }
+    }
+    
+    private void showDetailsCandidature(Candidature candidature) {
+        try {
+            Stage stage = new Stage();
+            stage.setTitle("Détails de la candidature");
+            
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            root.setStyle("-fx-background-color: #f8f9fa;");
+            
+            Label titleLabel = new Label("Détails de la candidature");
+            titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #34495e; -fx-border-color: #dee2e6; -fx-border-width: 0 0 2px 0; -fx-border-insets: 0 0 10px 0;");
+            
+            // Informations de l'offre
+            VBox offreInfo = new VBox(10);
+            offreInfo.setStyle("-fx-background-color: white; -fx-border-radius: 8px; -fx-border-color: #dee2e6; -fx-border-width: 1px; -fx-padding: 15px;");
+            
+            offreInfo.getChildren().addAll(
+                new Label("📋 Offre: " + candidature.getOffre().getTitre()),
+                new Label("🏢 Entreprise: " + candidature.getOffre().getEntreprise().getRaisonSociale()),
+                new Label("📅 Date de candidature: " + candidature.getDateCandidature().toString()),
+                new Label("📊 Statut actuel: " + getStatutCandidatureDisplay(candidature.getStatut()))
+            );
+            
+            // Boutons d'action
+            HBox buttonBox = new HBox(10);
+            buttonBox.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+            buttonBox.setPadding(new Insets(10, 0, 0, 0));
+            
+            Button btnClose = new Button("Fermer");
+            btnClose.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 12px; -fx-padding: 8px 15px; -fx-background-radius: 4px;");
+            btnClose.setOnAction(e -> stage.close());
+            
+            buttonBox.getChildren().add(btnClose);
+            
+            root.getChildren().addAll(titleLabel, offreInfo, buttonBox);
+            
+            Scene scene = new Scene(root, 500, 300);
+            stage.setScene(scene);
+            stage.show();
+            
+        } catch (Exception e) {
+            showAlert("Erreur", "Impossible d'afficher les détails de la candidature: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    private void marquerCandidaturesCommeLues(List<Candidature> candidatures) {
+        try {
+            for (Candidature candidature : candidatures) {
+                candidature.setNotifiee(true);
+                candidatureService.updateCandidature(candidature);
+            }
+            
+            showAlert("Succès", "Les " + candidatures.size() + " candidature(s) ont été marquées comme lues.", Alert.AlertType.INFORMATION);
+            
+            // Rafraîchir l'interface
+            // Note: Dans une vraie application, vous pourriez avoir besoin de rafraîchir le tableau
+            // ou d'utiliser un système de notification plus avancé
+            
+        } catch (Exception e) {
+            showAlert("Erreur", "Impossible de marquer les candidatures comme lues: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    private void generateAndDownloadRapportImage(List<Recrutement> recrutements, List<Offre> offres) {
+        try {
+            // Créer une image du rapport
+            int width = 1200;
+            int height = 800;
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = image.createGraphics();
+            
+            // Activer l'anti-aliasing
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            
+            // Fond blanc
+            g2d.setColor(Color.WHITE);
+            g2d.fillRect(0, 0, width, height);
+            
+            // Couleurs
+            Color primaryColor = new Color(52, 73, 94); // #34495e
+            Color accentColor = new Color(52, 152, 219); // #3498db
+            Color successColor = new Color(46, 204, 113); // #2ecc71
+            Color warningColor = new Color(241, 196, 15); // #f1c40f
+            
+            // En-tête
+            g2d.setColor(primaryColor);
+            g2d.fillRect(0, 0, width, 60);
+            
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 24));
+            g2d.drawString("RAPPORT DE RECRUTEMENT", 50, 40);
+            
+            g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+            g2d.drawString("Généré le: " + java.time.LocalDate.now().toString(), width - 200, 40);
+            
+            int yPosition = 80;
+            
+            // Section Statistiques
+            g2d.setColor(accentColor);
+            g2d.setFont(new Font("Arial", Font.BOLD, 16));
+            g2d.drawString("STATISTIQUES GLOBALES", 50, yPosition);
+            
+            yPosition += 30;
+            
+            // Cartes de statistiques
+            int cardX = 50;
+            int cardY = yPosition;
+            int cardWidth = 250;
+            int cardHeight = 80;
+            int cardSpacing = 20;
+            
+            // Carte 1: Total Offres
+            drawStatCard(g2d, "Total Offres", String.valueOf(offres.size()), 
+                        cardX, cardY, cardWidth, cardHeight, accentColor);
+            
+            // Carte 2: Offres Actives
+            drawStatCard(g2d, "Offres Actives", String.valueOf(offres.stream().filter(o -> o.getEtat() == Offre.EtatOffre.ACTIVE).count()), 
+                        cardX + cardWidth + cardSpacing, cardY, cardWidth, cardHeight, successColor);
+            
+            // Carte 3: Total Recrutements
+            drawStatCard(g2d, "Total Recrutements", String.valueOf(recrutements.size()), 
+                        cardX + 2 * (cardWidth + cardSpacing), cardY, cardWidth, cardHeight, warningColor);
+            
+            // Carte 4: Recrutements Actifs
+            drawStatCard(g2d, "Recrutements Actifs", String.valueOf(recrutements.stream().filter(r -> r.getDateRecrutement() != null).count()), 
+                        cardX + 3 * (cardWidth + cardSpacing), cardY, cardWidth, cardHeight, successColor);
+            
+            yPosition += cardHeight + 50;
+            
+            // Section Recrutements
+            g2d.setColor(accentColor);
+            g2d.setFont(new Font("Arial", Font.BOLD, 16));
+            g2d.drawString("RECRUTEMENTS RÉCENTS", 50, yPosition);
+            
+            yPosition += 30;
+            
+            // En-tête du tableau des recrutements
+            String[] headers = {"Offre", "Entreprise", "Candidat", "Date", "Statut"};
+            int[] colWidths = {200, 150, 180, 120, 100};
+            int tableX = 50;
+            
+            g2d.setColor(primaryColor);
+            g2d.fillRect(tableX, yPosition, width - 100, 25);
+            
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 12));
+            int headerX = tableX + 10;
+            for (int i = 0; i < headers.length; i++) {
+                g2d.drawString(headers[i], headerX, yPosition + 17);
+                headerX += colWidths[i];
+            }
+            
+            yPosition += 25;
+            
+            // Données du tableau (limité à 10 recrutements)
+            int maxRows = Math.min(10, recrutements.size());
+            for (int i = 0; i < maxRows; i++) {
+                Recrutement r = recrutements.get(i);
+                
+                // Ligne alternée
+                if (i % 2 == 0) {
+                    g2d.setColor(new Color(248, 249, 250)); // #f8f9fa
+                    g2d.fillRect(tableX, yPosition, width - 100, 22);
+                }
+                
+                g2d.setColor(primaryColor);
+                g2d.setFont(new Font("Arial", Font.PLAIN, 11));
+                
+                int dataX = tableX + 10;
+                g2d.drawString(truncateString(r.getOffre().getTitre(), 25), dataX, yPosition + 15);
+                dataX += colWidths[0];
+                g2d.drawString(truncateString(r.getEntreprise().getRaisonSociale(), 18), dataX, yPosition + 15);
+                dataX += colWidths[1];
+                g2d.drawString(truncateString(r.getDemandeur().getNom() + " " + r.getDemandeur().getPrenom(), 22), dataX, yPosition + 15);
+                dataX += colWidths[2];
+                g2d.drawString(r.getDateRecrutement().toString(), dataX, yPosition + 15);
+                dataX += colWidths[3];
+                
+                yPosition += 22;
+            }
+            
+            yPosition += 40;
+            
+            // Section Offres
+            g2d.setColor(accentColor);
+            g2d.setFont(new Font("Arial", Font.BOLD, 16));
+            g2d.drawString("OFFRES PUBLIÉES RÉCENTES", 50, yPosition);
+            
+            yPosition += 30;
+            
+            // En-tête du tableau des offres
+            String[] offreHeaders = {"Titre", "Entreprise", "Date Pub", "État", "Candidats"};
+            int[] offreColWidths = {200, 150, 120, 100, 80};
+            
+            g2d.setColor(primaryColor);
+            g2d.fillRect(tableX, yPosition, width - 100, 25);
+            
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 12));
+            headerX = tableX + 10;
+            for (int i = 0; i < offreHeaders.length; i++) {
+                g2d.drawString(offreHeaders[i], headerX, yPosition + 17);
+                headerX += offreColWidths[i];
+            }
+            
+            yPosition += 25;
+            
+            // Données du tableau des offres (limité à 10 offres)
+            maxRows = Math.min(10, offres.size());
+            for (int i = 0; i < maxRows; i++) {
+                Offre o = offres.get(i);
+                
+                // Ligne alternée
+                if (i % 2 == 0) {
+                    g2d.setColor(new Color(248, 249, 250)); // #f8f9fa
+                    g2d.fillRect(tableX, yPosition, width - 100, 22);
+                }
+                
+                g2d.setColor(primaryColor);
+                g2d.setFont(new Font("Arial", Font.PLAIN, 11));
+                
+                int dataX = tableX + 10;
+                g2d.drawString(truncateString(o.getTitre(), 25), dataX, yPosition + 15);
+                dataX += offreColWidths[0];
+                g2d.drawString(truncateString(o.getEntreprise().getRaisonSociale(), 18), dataX, yPosition + 15);
+                dataX += offreColWidths[1];
+                g2d.drawString("N/A", dataX, yPosition + 15);
+                dataX += offreColWidths[2];
+                g2d.drawString(o.getEtat().toString(), dataX, yPosition + 15);
+                dataX += offreColWidths[3];
+                g2d.drawString(String.valueOf((int) candidatureRepository.countByOffre(o.getIdOffre())), dataX, yPosition + 15);
+                
+                yPosition += 22;
+            }
+            
+            // Pied de page
+            yPosition = height - 40;
+            g2d.setColor(accentColor);
+            g2d.setFont(new Font("Arial", Font.ITALIC, 10));
+            g2d.drawString("Rapport généré par l'Agence de Recrutement - " + java.time.LocalDate.now().toString(), 50, yPosition);
+            
+            g2d.dispose();
+            
+            // Sauvegarder l'image
+            String userHome = System.getProperty("user.home");
+            File downloadDir = new File(userHome, "Downloads");
+            System.out.println("Dossier de téléchargement: " + downloadDir.getAbsolutePath());
+            
+            if (!downloadDir.exists()) {
+                boolean created = downloadDir.mkdirs();
+                System.out.println("Dossier Downloads créé: " + created);
+            }
+            
+            // Utiliser un nom de fichier valide (remplacer les caractères problématiques)
+            String today = java.time.LocalDate.now().toString().replace("-", "_");
+            String fileName = "rapport_recrutement_" + today + ".png";
+            System.out.println("Nom du fichier: " + fileName);
+            
+            File rapportFile = new File(downloadDir, fileName);
+            System.out.println("Chemin complet du fichier: " + rapportFile.getAbsolutePath());
+            
+            try {
+                javax.imageio.ImageIO.write(image, "PNG", rapportFile);
+                System.out.println("Image écrite avec succès");
+                
+                // Vérifier que le fichier existe et n'est pas vide
+                if (rapportFile.exists() && rapportFile.length() > 0) {
+                    System.out.println("Fichier vérifié - Taille: " + rapportFile.length() + " bytes");
+                    showAlert("Succès", "Rapport téléchargé avec succès dans:\n" + rapportFile.getAbsolutePath(), Alert.AlertType.INFORMATION);
+                    
+                    // Ouvrir le dossier Downloads
+                    try {
+                        java.awt.Desktop.getDesktop().open(downloadDir);
+                        System.out.println("Dossier Downloads ouvert avec succès");
+                    } catch (Exception openEx) {
+                        System.err.println("Erreur lors de l'ouverture du dossier: " + openEx.getMessage());
+                        showAlert("Information", "Rapport téléchargé avec succès dans:\n" + rapportFile.getAbsolutePath() + "\n(Impossible d'ouvrir automatiquement le dossier)", Alert.AlertType.INFORMATION);
+                    }
+                } else {
+                    throw new IOException("Le fichier n'a pas pu être créé ou est vide");
+                }
+            } catch (java.io.IOException ioEx) {
+                System.err.println("Erreur IO lors de l'écriture du fichier: " + ioEx.getMessage());
+                ioEx.printStackTrace();
+                throw new IOException("Impossible d'écrire le fichier rapport: " + ioEx.getMessage());
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Erreur lors de la génération du rapport: " + e.getMessage());
+            e.printStackTrace();
+            showAlert("Erreur", "Impossible de générer le rapport: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    private void drawStatCard(Graphics2D g2d, String title, String value, int x, int y, int width, int height, Color color) {
+        // Fond de la carte
+        g2d.setColor(Color.WHITE);
+        g2d.fillRect(x, y, width, height);
+        
+        // Bordure
+        g2d.setColor(color);
+        g2d.fillRect(x, y, width, 3); // Top border
+        g2d.fillRect(x, y, 3, height); // Left border
+        g2d.fillRect(x + width - 3, y, 3, height); // Right border
+        g2d.fillRect(x, y + height - 3, width, 3); // Bottom border
+        
+        // Texte
+        g2d.setColor(new Color(127, 140, 141)); // #7f8c8d
+        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+        g2d.drawString(title, x + 10, y + 25);
+        
+        g2d.setColor(color);
+        g2d.setFont(new Font("Arial", Font.BOLD, 20));
+        g2d.drawString(value, x + 10, y + 55);
+    }
+    
+    private String truncateString(String str, int maxLength) {
+        if (str.length() <= maxLength) {
+            return str;
+        }
+        return str.substring(0, maxLength - 3) + "...";
+    }
     
     private void telechargerCVDemandeur(DemandeurEmploi demandeur) {
         try {

@@ -72,6 +72,15 @@ public class CandidatureService {
     public boolean aDejaPostule(Long idDemandeur, Long idOffre) {
         return candidatureRepository.existsByDemandeurIdUtilisateurAndOffreIdOffre(idDemandeur, idOffre);
     }
+    
+    public List<Candidature> getCandidaturesWithRelations(Long idDemandeur) {
+        return candidatureRepository.findByDemandeurIdUtilisateurWithRelations(idDemandeur);
+    }
+    
+    @Transactional
+    public void updateCandidature(Candidature candidature) {
+        candidatureRepository.save(candidature);
+    }
 }
 
 
