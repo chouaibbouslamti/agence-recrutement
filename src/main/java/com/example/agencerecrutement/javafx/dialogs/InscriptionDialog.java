@@ -7,6 +7,10 @@ import com.example.agencerecrutement.service.EntrepriseService;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.stage.FileChooser;
+
+import java.io.File;
 
 public class InscriptionDialog extends Dialog<Object> {
     
@@ -31,6 +35,8 @@ public class InscriptionDialog extends Dialog<Object> {
     private TextField diplomeField;
     private Spinner<Integer> experienceSpinner;
     private Spinner<Double> salaireSpinner;
+    private Label cvPathLabel;
+    private File selectedCVFile;
     
     public InscriptionDialog(EntrepriseService entrepriseService,
                             DemandeurEmploiService demandeurEmploiService,
@@ -157,6 +163,16 @@ public class InscriptionDialog extends Dialog<Object> {
             grid.add(experienceSpinner, 1, row++);
             grid.add(new Label("Salaire souhaité :"), 0, row);
             grid.add(salaireSpinner, 1, row++);
+            
+            // Champ CV obligatoire pour les demandeurs
+            cvPathLabel = new Label("Aucun CV sélectionné");
+            cvPathLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            Button btnChoisirCV = new Button("Choisir un CV (PNG)");
+            btnChoisirCV.setOnAction(e -> choisirCV());
+            
+            HBox cvBox = new HBox(10, btnChoisirCV, cvPathLabel);
+            grid.add(new Label("CV (PNG obligatoire) :"), 0, row);
+            grid.add(cvBox, 1, row++);
         }
         
         return grid;
@@ -184,6 +200,19 @@ public class InscriptionDialog extends Dialog<Object> {
                 showError("Veuillez remplir tous les champs obligatoires");
                 return false;
             }
+            
+            // Validation du CV obligatoire
+            if (selectedCVFile == null) {
+                showError("Veuillez sélectionner un CV au format PNG");
+                return false;
+            }
+            
+            // Validation du format PNG uniquement
+            String fileName = selectedCVFile.getName().toLowerCase();
+            if (!fileName.endsWith(".png")) {
+                showError("Le CV doit être au format PNG uniquement");
+                return false;
+            }
         }
         return true;
     }
@@ -194,6 +223,30 @@ public class InscriptionDialog extends Dialog<Object> {
         alert.setHeaderText("Champs invalides");
         alert.setContentText(message);
         alert.showAndWait();
+    }
+    
+    private void choisirCV() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Sélectionner votre CV");
+        fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("Fichiers PNG", "*.png")
+        );
+        
+        File file = fileChooser.showOpenDialog(getOwner());
+        if (file != null) {
+            String fileName = file.getName().toLowerCase();
+            if (fileName.endsWith(".png")) {
+                selectedCVFile = file;
+                cvPathLabel.setText(file.getName());
+                cvPathLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+            } else {
+                showError("Veuillez sélectionner un fichier au format PNG uniquement");
+            }
+        }
+    }
+    
+    public File getSelectedCVFile() {
+        return selectedCVFile;
     }
 }
 

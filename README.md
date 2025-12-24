@@ -54,7 +54,7 @@ Ou depuis votre IDE, exécutez la classe `AgencerecrutementApplication`.
 
 À la première exécution, un compte administrateur est créé automatiquement :
 - **Login** : `admin`
-- **Mot de passe** : `admin`
+- **Mot de passe** : `1234567890`
 
 ⚠️ **Important** : Changez ce mot de passe après la première connexion !
 
@@ -109,6 +109,10 @@ src/main/java/com/example/agencerecrutement/
 - Notifications
 
 ## Auteurs
+hiba zouitina
+imane taleb
+saida stifi
+chouaib bouslamti
 
 Projet développé dans le cadre d'un mini-projet Spring Boot + JavaFX
 

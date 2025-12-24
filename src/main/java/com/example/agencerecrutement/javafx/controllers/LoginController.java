@@ -2,10 +2,13 @@ package com.example.agencerecrutement.javafx.controllers;
 
 import com.example.agencerecrutement.javafx.dialogs.InscriptionDialog;
 import com.example.agencerecrutement.javafx.dialogs.MotDePasseOublieDialog;
+import com.example.agencerecrutement.model.DemandeurEmploi;
+import com.example.agencerecrutement.model.Document;
 import com.example.agencerecrutement.model.Utilisateur;
 import com.example.agencerecrutement.repository.UtilisateurRepository;
 import com.example.agencerecrutement.service.AuthentificationService;
 import com.example.agencerecrutement.service.DemandeurEmploiService;
+import com.example.agencerecrutement.service.DocumentService;
 import com.example.agencerecrutement.service.EntrepriseService;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -16,10 +19,15 @@ import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,6 +37,7 @@ public class LoginController {
     private final AuthentificationService authentificationService;
     private final EntrepriseService entrepriseService;
     private final DemandeurEmploiService demandeurEmploiService;
+    private final DocumentService documentService;
     private final UtilisateurRepository utilisateurRepository;
     private ConfigurableApplicationContext applicationContext;
     private Utilisateur utilisateurConnecte;
@@ -43,10 +52,12 @@ public class LoginController {
     public LoginController(AuthentificationService authentificationService,
                           EntrepriseService entrepriseService,
                           DemandeurEmploiService demandeurEmploiService,
+                          DocumentService documentService,
                           UtilisateurRepository utilisateurRepository) {
         this.authentificationService = authentificationService;
         this.entrepriseService = entrepriseService;
         this.demandeurEmploiService = demandeurEmploiService;
+        this.documentService = documentService;
         this.utilisateurRepository = utilisateurRepository;
         initializeView();
     }
@@ -313,11 +324,52 @@ public class LoginController {
             java.util.Optional<Object> inscriptionResult = dialog.showAndWait();
             
             if (inscriptionResult.isPresent()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Succès");
-                alert.setHeaderText("Inscription réussie");
-                alert.setContentText("Votre compte a été créé avec succès. Vous pouvez maintenant vous connecter.");
-                alert.showAndWait();
+                Object resultObject = inscriptionResult.get();
+                
+                try {
+                    if (!isEntreprise && resultObject instanceof DemandeurEmploi) {
+                        // C'est un demandeur d'emploi, il faut gérer le CV
+                        DemandeurEmploi demandeur = (DemandeurEmploi) resultObject;
+                        File cvFile = dialog.getSelectedCVFile();
+                        
+                        if (cvFile != null) {
+                            // Convertir le fichier en MultipartFile
+                            MultipartFile multipartFile = convertFileToMultipartFile(cvFile);
+                            
+                            // Créer le document CV
+                            Document cvDocument = documentService.uploadDocument(
+                                multipartFile, 
+                                demandeur, 
+                                "CV"
+                            );
+                            
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("Succès");
+                            alert.setHeaderText("Inscription réussie");
+                            alert.setContentText("Votre compte et votre CV ont été créés avec succès. Votre CV est automatiquement validé et visible par les entreprises. Vous pouvez maintenant vous connecter.");
+                            alert.showAndWait();
+                        } else {
+                            Alert alert = new Alert(Alert.AlertType.ERROR);
+                            alert.setTitle("Erreur");
+                            alert.setHeaderText("CV manquant");
+                            alert.setContentText("Une erreur est survenue lors du traitement de votre CV.");
+                            alert.showAndWait();
+                        }
+                    } else {
+                        // C'est une entreprise, inscription normale
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                        alert.setTitle("Succès");
+                        alert.setHeaderText("Inscription réussie");
+                        alert.setContentText("Votre compte a été créé avec succès. Vous pouvez maintenant vous connecter.");
+                        alert.showAndWait();
+                    }
+                } catch (Exception e) {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Erreur");
+                    alert.setHeaderText("Erreur lors de l'inscription");
+                    alert.setContentText("Une erreur est survenue: " + e.getMessage());
+                    alert.showAndWait();
+                }
             }
         }
     }
@@ -325,6 +377,58 @@ public class LoginController {
     private void handleMotDePasseOublie() {
         MotDePasseOublieDialog dialog = new MotDePasseOublieDialog();
         dialog.showAndWait();
+    }
+    
+    private MultipartFile convertFileToMultipartFile(File file) throws IOException {
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        String contentType = Files.probeContentType(file.toPath());
+        if (contentType == null) {
+            contentType = "application/octet-stream";
+        }
+        
+        final String finalContentType = contentType;
+        
+        return new MultipartFile() {
+            @Override
+            public String getName() {
+                return file.getName();
+            }
+            
+            @Override
+            public String getOriginalFilename() {
+                return file.getName();
+            }
+            
+            @Override
+            public String getContentType() {
+                return finalContentType;
+            }
+            
+            @Override
+            public boolean isEmpty() {
+                return fileContent.length == 0;
+            }
+            
+            @Override
+            public long getSize() {
+                return fileContent.length;
+            }
+            
+            @Override
+            public byte[] getBytes() throws IOException {
+                return fileContent;
+            }
+            
+            @Override
+            public java.io.InputStream getInputStream() throws IOException {
+                return new java.io.ByteArrayInputStream(fileContent);
+            }
+            
+            @Override
+            public void transferTo(java.io.File dest) throws IOException {
+                Files.write(dest.toPath(), fileContent);
+            }
+        };
     }
     
     private void showError(String message) {

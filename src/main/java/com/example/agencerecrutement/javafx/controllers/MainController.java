@@ -4,15 +4,20 @@ import com.example.agencerecrutement.javafx.dialogs.*;
 import com.example.agencerecrutement.model.*;
 import com.example.agencerecrutement.repository.*;
 import com.example.agencerecrutement.service.*;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -25,6 +30,7 @@ public class MainController {
     private final RecrutementService recrutementService;
     private final JournalService journalService;
     private final DemandeurEmploiService demandeurEmploiService;
+    private final DocumentService documentService;
     private final UtilisateurRepository utilisateurRepository;
     private final EntrepriseRepository entrepriseRepository;
     private final DemandeurEmploiRepository demandeurEmploiRepository;
@@ -34,6 +40,7 @@ public class MainController {
     private final RecrutementRepository recrutementRepository;
     private final AbonnementRepository abonnementRepository;
     private final PublicationOffreRepository publicationOffreRepository;
+    private final DocumentRepository documentRepository;
     private final AuthentificationService authentificationService;
     
     private ConfigurableApplicationContext applicationContext;
@@ -43,17 +50,19 @@ public class MainController {
     public MainController(EntrepriseService entrepriseService, OffreService offreService,
                          CandidatureService candidatureService, RecrutementService recrutementService,
                          JournalService journalService, DemandeurEmploiService demandeurEmploiService,
-                         UtilisateurRepository utilisateurRepository, EntrepriseRepository entrepriseRepository,
-                         DemandeurEmploiRepository demandeurEmploiRepository, JournalRepository journalRepository,
-                         OffreRepository offreRepository, CandidatureRepository candidatureRepository,
-                         RecrutementRepository recrutementRepository, AbonnementRepository abonnementRepository,
-                         PublicationOffreRepository publicationOffreRepository, AuthentificationService authentificationService) {
+                         DocumentService documentService, UtilisateurRepository utilisateurRepository, 
+                         EntrepriseRepository entrepriseRepository, DemandeurEmploiRepository demandeurEmploiRepository, 
+                         JournalRepository journalRepository, OffreRepository offreRepository, 
+                         CandidatureRepository candidatureRepository, RecrutementRepository recrutementRepository, 
+                         AbonnementRepository abonnementRepository, PublicationOffreRepository publicationOffreRepository, 
+                         DocumentRepository documentRepository, AuthentificationService authentificationService) {
         this.entrepriseService = entrepriseService;
         this.offreService = offreService;
         this.candidatureService = candidatureService;
         this.recrutementService = recrutementService;
         this.journalService = journalService;
         this.demandeurEmploiService = demandeurEmploiService;
+        this.documentService = documentService;
         this.utilisateurRepository = utilisateurRepository;
         this.entrepriseRepository = entrepriseRepository;
         this.demandeurEmploiRepository = demandeurEmploiRepository;
@@ -63,6 +72,7 @@ public class MainController {
         this.recrutementRepository = recrutementRepository;
         this.abonnementRepository = abonnementRepository;
         this.publicationOffreRepository = publicationOffreRepository;
+        this.documentRepository = documentRepository;
         this.authentificationService = authentificationService;
         initializeView();
     }
@@ -145,6 +155,28 @@ public class MainController {
             
             menuAdmin.getItems().addAll(itemGestionUsers, itemGestionJournaux, itemStats);
             menuBar.getMenus().add(menuAdmin);
+        } else if (utilisateurConnecte.getRole() == Utilisateur.Role.DEMANDEUR_EMPLOI) {
+            Menu menuDemandeur = new Menu("Mes Documents");
+            MenuItem itemMesDocuments = new MenuItem("Gérer mes documents");
+            MenuItem itemUploadCV = new MenuItem("Téléverser un CV");
+            
+            // Ajouter les actions pour les demandeurs d'emploi
+            itemMesDocuments.setOnAction(e -> showMesDocuments());
+            itemUploadCV.setOnAction(e -> handleUploadCV());
+            
+            menuDemandeur.getItems().addAll(itemMesDocuments, itemUploadCV);
+            menuBar.getMenus().add(menuDemandeur);
+        } else if (utilisateurConnecte.getRole() == Utilisateur.Role.ENTREPRISE) {
+            Menu menuEntreprise = new Menu("Recrutement");
+            MenuItem itemCandidats = new MenuItem("Voir les candidats");
+            MenuItem itemMesRecrutements = new MenuItem("Mes recrutements");
+            
+            // Ajouter les actions pour les entreprises
+            itemCandidats.setOnAction(e -> showCandidatsPourRecrutement());
+            itemMesRecrutements.setOnAction(e -> showMesRecrutements());
+            
+            menuEntreprise.getItems().addAll(itemCandidats, itemMesRecrutements);
+            menuBar.getMenus().add(menuEntreprise);
         }
         
         return menuBar;
@@ -425,7 +457,35 @@ public class MainController {
             expCol.setCellValueFactory(param -> 
                 new javafx.beans.property.SimpleIntegerProperty(param.getValue().getDemandeur().getExperience()).asObject());
             
-            tableView.getColumns().addAll(demandeurCol, offreCol, dateCol, expCol);
+            // Colonne CV avec boutons pour voir et télécharger
+            TableColumn<Candidature, Void> cvCol = new TableColumn<>("CV");
+            cvCol.setCellFactory(param -> new TableCell<>() {
+                private final Button btnTelechargerCV = new Button("Télécharger CV");
+                private final HBox cvBox = new HBox(5, btnTelechargerCV);
+                
+                {
+                    btnTelechargerCV.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-pref-width: 100;");
+                    
+                    btnTelechargerCV.setOnAction(event -> {
+                        Candidature candidature = getTableView().getItems().get(getIndex());
+                        DemandeurEmploi demandeur = candidature.getDemandeur();
+                        telechargerCVDemandeur(demandeur);
+                    });
+                }
+                
+                @Override
+                protected void updateItem(Void item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty) {
+                        setGraphic(null);
+                    } else {
+                        setGraphic(cvBox);
+                    }
+                }
+            });
+            cvCol.setPrefWidth(200);
+            
+            tableView.getColumns().addAll(demandeurCol, offreCol, dateCol, expCol, cvCol);
             
             // Charger les candidatures de toutes les offres de l'entreprise
             offreService.getOffresByEntreprise(entreprise.getIdUtilisateur())
@@ -1244,6 +1304,45 @@ public class MainController {
         grid.add(new Label("Salaire souhaité :"), 0, 7);
         grid.add(salaireSpinner, 1, 7);
         
+        // Ajout de la section pour le remplacement du CV
+        Label cvLabel = new Label("CV actuel :");
+        grid.add(cvLabel, 0, 8);
+        
+        // Vérifier si le demandeur a déjà un CV
+        Document cvActuel = documentService.getCvValideParDemandeur(demandeur.getIdUtilisateur());
+        String cvInfo = (cvActuel != null) ? cvActuel.getNomFichier() : "Aucun CV";
+        Label currentCVLabel = new Label(cvInfo);
+        currentCVLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        grid.add(currentCVLabel, 1, 8);
+        
+        // Bouton pour remplacer le CV
+        Button btnRemplacerCV = new Button("Remplacer mon CV");
+        btnRemplacerCV.setStyle("-fx-background-color: #FF9800; -fx-text-fill: white;");
+        grid.add(btnRemplacerCV, 1, 9);
+        
+        // Gestion du remplacement du CV
+        final File[] newCVFile = new File[1]; // Pour stocker le nouveau fichier
+        Label newCVLabel = new Label();
+        newCVLabel.setStyle("-fx-font-style: italic; -fx-text-fill: green;");
+        grid.add(newCVLabel, 1, 10);
+        
+        btnRemplacerCV.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Choisir votre nouveau CV");
+            fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Fichiers PNG", "*.png")
+            );
+            
+            File file = fileChooser.showOpenDialog(dialog.getOwner());
+            if (file != null && file.getName().toLowerCase().endsWith(".png")) {
+                newCVFile[0] = file;
+                newCVLabel.setText("Nouveau CV sélectionné: " + file.getName());
+                btnRemplacerCV.setText("Changer de sélection");
+            } else if (file != null) {
+                showAlert("Erreur", "Veuillez sélectionner un fichier au format PNG", Alert.AlertType.ERROR);
+            }
+        });
+        
         dialog.getDialogPane().setContent(grid);
         
         dialog.setResultConverter(dialogButton -> {
@@ -1256,8 +1355,16 @@ public class MainController {
                 demandeur.setDiplome(diplomeField.getText().trim());
                 demandeur.setExperience(experienceSpinner.getValue());
                 demandeur.setSalaireSouhaite(salaireSpinner.getValue());
+                
                 try {
+                    // Sauvegarder les coordonnées du demandeur
                     demandeurEmploiRepository.save(demandeur);
+                    
+                    // Gérer le remplacement du CV si un nouveau fichier a été sélectionné
+                    if (newCVFile[0] != null) {
+                        remplacerCVDemandeur(demandeur, newCVFile[0]);
+                    }
+                    
                     return demandeur;
                 } catch (Exception e) {
                     showError("Erreur lors de la mise à jour", e.getMessage());
@@ -1269,7 +1376,11 @@ public class MainController {
         
         java.util.Optional<DemandeurEmploi> result = dialog.showAndWait();
         if (result.isPresent()) {
-            showInfo("Succès", "Vos coordonnées ont été mises à jour.");
+            String message = "Vos coordonnées ont été mises à jour.";
+            if (newCVFile[0] != null) {
+                message += "\nVotre CV a également été remplacé avec succès.";
+            }
+            showInfo("Succès", message);
             updateViewAndScene();
         }
     }
@@ -1319,7 +1430,41 @@ public class MainController {
         actifCol.setCellValueFactory(new PropertyValueFactory<>("actif"));
         actifCol.setPrefWidth(100);
         
-        tableView.getColumns().addAll(idCol, loginCol, roleCol, typeCol, actifCol);
+        // Colonne Actions avec boutons CV pour les demandeurs d'emploi
+        TableColumn<Utilisateur, Void> actionsCol = new TableColumn<>("Actions");
+        actionsCol.setCellFactory(param -> new TableCell<>() {
+            private final Button btnTelechargerCV = new Button("Télécharger CV");
+            private final HBox actionsBox = new HBox(5, btnTelechargerCV);
+            
+            {
+                btnTelechargerCV.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+                
+                btnTelechargerCV.setOnAction(event -> {
+                    Utilisateur utilisateur = getTableView().getItems().get(getIndex());
+                    if (utilisateur instanceof DemandeurEmploi) {
+                        telechargerCVDemandeur((DemandeurEmploi) utilisateur);
+                    }
+                });
+            }
+            
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    Utilisateur utilisateur = getTableView().getItems().get(getIndex());
+                    if (utilisateur instanceof DemandeurEmploi) {
+                        setGraphic(actionsBox);
+                    } else {
+                        setGraphic(null);
+                    }
+                }
+            }
+        });
+        actionsCol.setPrefWidth(200);
+        
+        tableView.getColumns().addAll(idCol, loginCol, roleCol, typeCol, actifCol, actionsCol);
         
         // Charger les utilisateurs
         List<Utilisateur> utilisateurs = utilisateurRepository.findAll();
@@ -1825,6 +1970,610 @@ public class MainController {
         Label label = new Label(text + ": " + value);
         label.setStyle("-fx-font-size: 14px;");
         return label;
+    }
+    
+    // ========== GESTION DES DOCUMENTS ==========
+    
+    public void handleUploadCV() {
+        if (utilisateurConnecte instanceof DemandeurEmploi) {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Sélectionner votre CV");
+            fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Fichiers PNG", "*.png")
+            );
+            
+            File file = fileChooser.showOpenDialog(getCurrentStage());
+            if (file != null) {
+                try {
+                    // Convertir le fichier en MultipartFile
+                    MultipartFile multipartFile = convertFileToMultipartFile(file);
+                    
+                    Document document = documentService.uploadDocument(
+                        multipartFile, 
+                        (DemandeurEmploi) utilisateurConnecte,
+                        "CV"
+                    );
+                    
+                    showAlert("Succès", "CV téléversé avec succès !\nEn attente de validation par l'administrateur.", Alert.AlertType.INFORMATION);
+                    
+                } catch (IOException e) {
+                    showAlert("Erreur", "Erreur lors du téléversement du fichier: " + e.getMessage(), Alert.AlertType.ERROR);
+                } catch (IllegalArgumentException e) {
+                    showAlert("Erreur", e.getMessage(), Alert.AlertType.ERROR);
+                }
+            }
+        }
+    }
+    
+    public void showDocumentsEnAttente() {
+        if (utilisateurConnecte.getRole() == Utilisateur.Role.ADMINISTRATEUR) {
+            Stage stage = new Stage();
+            stage.setTitle("Documents en attente de validation");
+            
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            
+            Label title = new Label("Documents en attente de validation");
+            title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+            
+            // TableView pour afficher les documents
+            TableView<Document> tableDocuments = new TableView<>();
+            
+            TableColumn<Document, String> colNomFichier = new TableColumn<>("Nom du fichier");
+            colNomFichier.setCellValueFactory(new PropertyValueFactory<>("nomFichier"));
+            
+            TableColumn<Document, String> colTypeDocument = new TableColumn<>("Type");
+            colTypeDocument.setCellValueFactory(new PropertyValueFactory<>("typeDocument"));
+            
+            TableColumn<Document, String> colDemandeur = new TableColumn<>("Demandeur");
+            colDemandeur.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getNom() + " " + 
+                    cellData.getValue().getDemandeur().getPrenom()
+                )
+            );
+            
+            TableColumn<Document, String> colDateUpload = new TableColumn<>("Date upload");
+            colDateUpload.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDateUpload().toLocalDate().toString()
+                )
+            );
+            
+            TableColumn<Document, Void> colActions = new TableColumn<>("Actions");
+            colActions.setCellFactory(param -> new TableCell<>() {
+                private final Button btnValider = new Button("Valider");
+                private final Button btnRejeter = new Button("Rejeter");
+                private final HBox actionsBox = new HBox(5, btnValider, btnRejeter);
+                
+                {
+                    btnValider.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+                    btnRejeter.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
+                    
+                    btnValider.setOnAction(event -> {
+                        Document doc = getTableView().getItems().get(getIndex());
+                        validerDocument(doc);
+                        tableDocuments.getItems().remove(doc);
+                    });
+                    
+                    btnRejeter.setOnAction(event -> {
+                        Document doc = getTableView().getItems().get(getIndex());
+                        rejeterDocument(doc);
+                        tableDocuments.getItems().remove(doc);
+                    });
+                }
+                
+                @Override
+                protected void updateItem(Void item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty) {
+                        setGraphic(null);
+                    } else {
+                        setGraphic(actionsBox);
+                    }
+                }
+            });
+            
+            tableDocuments.getColumns().addAll(colNomFichier, colTypeDocument, colDemandeur, colDateUpload, colActions);
+            
+            // Charger les documents en attente
+            List<Document> documentsEnAttente = documentService.getDocumentsEnAttente();
+            tableDocuments.getItems().addAll(documentsEnAttente);
+            
+            Button btnRefresh = new Button("Actualiser");
+            btnRefresh.setOnAction(e -> {
+                tableDocuments.getItems().clear();
+                tableDocuments.getItems().addAll(documentService.getDocumentsEnAttente());
+            });
+            
+            root.getChildren().addAll(title, tableDocuments, btnRefresh);
+            
+            Scene scene = new Scene(root, 800, 600);
+            stage.setScene(scene);
+            stage.show();
+        }
+    }
+    
+    private void validerDocument(Document document) {
+        documentService.validerDocument(document.getId());
+        showAlert("Succès", "Document validé avec succès", Alert.AlertType.INFORMATION);
+    }
+    
+    private void rejeterDocument(Document document) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirmation");
+        alert.setHeaderText("Rejeter le document");
+        alert.setContentText("Êtes-vous sûr de vouloir rejeter ce document ?");
+        
+        if (alert.showAndWait().get() == ButtonType.OK) {
+            documentService.rejeterDocument(document.getId());
+            showAlert("Succès", "Document rejeté et supprimé", Alert.AlertType.INFORMATION);
+        }
+    }
+    
+    public void showMesDocuments() {
+        if (utilisateurConnecte instanceof DemandeurEmploi) {
+            Stage stage = new Stage();
+            stage.setTitle("Mes documents");
+            
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            
+            Label title = new Label("Mes documents");
+            title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+            
+            TableView<Document> tableDocuments = new TableView<>();
+            
+            TableColumn<Document, String> colNomFichier = new TableColumn<>("Nom du fichier");
+            colNomFichier.setCellValueFactory(new PropertyValueFactory<>("nomFichier"));
+            
+            TableColumn<Document, String> colTypeDocument = new TableColumn<>("Type");
+            colTypeDocument.setCellValueFactory(new PropertyValueFactory<>("typeDocument"));
+            
+            TableColumn<Document, String> colStatut = new TableColumn<>("Statut");
+            colStatut.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().isValide() ? "Validé" : "En attente"
+                )
+            );
+            
+            TableColumn<Document, String> colDateUpload = new TableColumn<>("Date upload");
+            colDateUpload.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDateUpload().toLocalDate().toString()
+                )
+            );
+            
+            tableDocuments.getColumns().addAll(colNomFichier, colTypeDocument, colStatut, colDateUpload);
+            
+            // Charger les documents du demandeur
+            List<Document> mesDocuments = documentService.getDocumentsParDemandeur(
+                ((DemandeurEmploi) utilisateurConnecte).getIdUtilisateur()
+            );
+            tableDocuments.getItems().addAll(mesDocuments);
+            
+            Button btnUploadCV = new Button("Téléverser un CV");
+            btnUploadCV.setOnAction(e -> handleUploadCV());
+            
+            root.getChildren().addAll(title, tableDocuments, btnUploadCV);
+            
+            Scene scene = new Scene(root, 700, 500);
+            stage.setScene(scene);
+            stage.show();
+        }
+    }
+    
+    private Stage getCurrentStage() {
+        // Trouver la fenêtre actuelle
+        return javafx.stage.Stage.getWindows().stream()
+                .filter(window -> window.isShowing())
+                .map(window -> (Stage) window)
+                .findFirst()
+                .orElse(null);
+    }
+    
+    private MultipartFile convertFileToMultipartFile(File file) throws IOException {
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        String contentType = Files.probeContentType(file.toPath());
+        if (contentType == null) {
+            contentType = "application/octet-stream";
+        }
+        
+        final String finalContentType = contentType;
+        
+        return new MultipartFile() {
+            @Override
+            public String getName() {
+                return file.getName();
+            }
+            
+            @Override
+            public String getOriginalFilename() {
+                return file.getName();
+            }
+            
+            @Override
+            public String getContentType() {
+                return finalContentType;
+            }
+            
+            @Override
+            public boolean isEmpty() {
+                return fileContent.length == 0;
+            }
+            
+            @Override
+            public long getSize() {
+                return fileContent.length;
+            }
+            
+            @Override
+            public byte[] getBytes() throws IOException {
+                return fileContent;
+            }
+            
+            @Override
+            public java.io.InputStream getInputStream() throws IOException {
+                return new java.io.ByteArrayInputStream(fileContent);
+            }
+            
+            @Override
+            public void transferTo(java.io.File dest) throws IOException {
+                Files.write(dest.toPath(), fileContent);
+            }
+        };
+    }
+    
+    private void showAlert(String title, String message, Alert.AlertType alertType) {
+        Alert alert = new Alert(alertType);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
+    // ========== GESTION DEMANDEUR - TÉLÉCHARGEMENT CV ==========
+    
+    private void telechargerCVDemandeur(DemandeurEmploi demandeur) {
+        try {
+            System.out.println("Téléchargement du CV pour le demandeur ID: " + demandeur.getIdUtilisateur());
+            
+            List<Document> documents = documentService.getDocumentsParDemandeur(demandeur.getIdUtilisateur());
+            System.out.println("Nombre de documents trouvés: " + documents.size());
+            
+            if (documents.isEmpty()) {
+                showAlert("Information", "Aucun CV trouvé pour ce demandeur", Alert.AlertType.INFORMATION);
+                return;
+            }
+            
+            // Prendre le premier document (normalement le CV)
+            Document cvDocument = documents.get(0);
+            System.out.println("Document trouvé - ID: " + cvDocument.getId() + ", Nom: " + cvDocument.getNomFichier());
+            
+            // Télécharger le contenu du document
+            byte[] cvContent = documentService.downloadDocument(cvDocument.getId());
+            System.out.println("Taille du contenu téléchargé: " + (cvContent != null ? cvContent.length : 0) + " bytes");
+            
+            if (cvContent != null && cvContent.length > 0) {
+                try {
+                    // Créer le dossier Downloads s'il n'existe pas
+                    String userHome = System.getProperty("user.home");
+                    File downloadDir = new File(userHome, "Downloads");
+                    System.out.println("Dossier de téléchargement: " + downloadDir.getAbsolutePath());
+                    
+                    if (!downloadDir.exists()) {
+                        boolean created = downloadDir.mkdirs();
+                        System.out.println("Dossier créé: " + created);
+                    }
+                    
+                    // Écrire le fichier
+                    File cvFile = new File(downloadDir, cvDocument.getNomFichier());
+                    System.out.println("Écriture du fichier vers: " + cvFile.getAbsolutePath());
+                    
+                    java.nio.file.Files.write(cvFile.toPath(), cvContent);
+                    System.out.println("Fichier écrit avec succès");
+                    
+                    // Vérifier que le fichier existe
+                    if (cvFile.exists() && cvFile.length() > 0) {
+                        String fileType = cvDocument.getNomFichier().toLowerCase().endsWith(".png") ? "Image PNG" : "CV";
+                        showAlert("Information", fileType + " téléchargé avec succès dans: " + cvFile.getAbsolutePath(), Alert.AlertType.INFORMATION);
+                        
+                        // Ouvrir le dossier Downloads
+                        try {
+                            java.awt.Desktop.getDesktop().open(downloadDir);
+                            System.out.println("Dossier Downloads ouvert avec succès");
+                        } catch (Exception openEx) {
+                            System.err.println("Erreur lors de l'ouverture du dossier: " + openEx.getMessage());
+                            showAlert("Information", fileType + " téléchargé avec succès dans: " + cvFile.getAbsolutePath() + "\n(Impossible d'ouvrir automatiquement le dossier)", Alert.AlertType.INFORMATION);
+                        }
+                    } else {
+                        throw new IOException("Le fichier n'a pas pu être créé ou est vide");
+                    }
+                    
+                } catch (IOException ioEx) {
+                    System.err.println("Erreur IO lors du téléchargement: " + ioEx.getMessage());
+                    ioEx.printStackTrace();
+                    showAlert("Erreur", "Erreur lors de l'écriture du fichier: " + ioEx.getMessage(), Alert.AlertType.ERROR);
+                }
+            } else {
+                showAlert("Erreur", "Le contenu du CV est vide ou null.", Alert.AlertType.ERROR);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Erreur générale lors du téléchargement du CV: " + e.getMessage());
+            e.printStackTrace();
+            showAlert("Erreur", "Impossible de télécharger le CV: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    private void remplacerCVDemandeur(DemandeurEmploi demandeur, File newCVFile) {
+        try {
+            System.out.println("Début du remplacement de CV pour le demandeur ID: " + demandeur.getIdUtilisateur());
+            System.out.println("Nouveau fichier CV: " + (newCVFile != null ? newCVFile.getName() : "null"));
+            
+            // Vérifier si le demandeur a déjà un CV
+            Document cvActuel = documentService.getCvValideParDemandeur(demandeur.getIdUtilisateur());
+            
+            if (cvActuel != null) {
+                System.out.println("Ancien CV trouvé - ID: " + cvActuel.getId());
+                // Supprimer l'ancien CV
+                documentService.rejeterDocument(cvActuel.getId());
+                System.out.println("Ancien CV supprimé avec succès");
+            } else {
+                System.out.println("Aucun ancien CV trouvé pour ce demandeur");
+            }
+            
+            // Convertir le fichier en MultipartFile
+            MultipartFile multipartFile = convertFileToMultipartFile(newCVFile);
+            System.out.println("Fichier converti en MultipartFile avec succès");
+            
+            // Créer le nouveau CV
+            Document nouveauCV = documentService.uploadDocument(
+                multipartFile, 
+                demandeur, 
+                "CV"
+            );
+            
+            System.out.println("Nouveau CV créé avec ID: " + nouveauCV.getId());
+            
+            showAlert("Succès", "Votre CV a été remplacé avec succès!", Alert.AlertType.INFORMATION);
+            
+        } catch (IOException e) {
+            System.err.println("Erreur IOException lors du remplacement: " + e.getMessage());
+            showAlert("Erreur", "Impossible de remplacer le CV: " + e.getMessage(), Alert.AlertType.ERROR);
+        } catch (Exception e) {
+            System.err.println("Erreur Exception lors du remplacement: " + e.getMessage());
+            e.printStackTrace();
+            showAlert("Erreur", "Erreur lors du remplacement du CV: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    // ========== GESTION ENTREPRISE - CANDIDATS ==========
+    
+    public void showCandidatsPourRecrutement() {
+        if (utilisateurConnecte instanceof Entreprise) {
+            Stage stage = new Stage();
+            stage.setTitle("Candidats disponibles pour recrutement");
+            
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            
+            Label title = new Label("Candidats avec CV validés");
+            title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+            
+            // TableView pour afficher les candidats
+            TableView<Document> tableCandidats = new TableView<>();
+            
+            TableColumn<Document, String> colNomCandidat = new TableColumn<>("Nom du candidat");
+            colNomCandidat.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getNom() + " " + 
+                    cellData.getValue().getDemandeur().getPrenom()
+                )
+            );
+            
+            TableColumn<Document, String> colEmail = new TableColumn<>("Email");
+            colEmail.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getLogin()
+                )
+            );
+            
+            TableColumn<Document, String> colDiplome = new TableColumn<>("Diplôme");
+            colDiplome.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getDiplome()
+                )
+            );
+            
+            TableColumn<Document, String> colExperience = new TableColumn<>("Expérience");
+            colExperience.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getExperience() + " an(s)"
+                )
+            );
+            
+            TableColumn<Document, String> colSalaire = new TableColumn<>("Salaire souhaité");
+            colSalaire.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getSalaireSouhaite() + " €"
+                )
+            );
+            
+            // Colonne CV séparée pour plus de visibilité
+            TableColumn<Document, String> colCV = new TableColumn<>("CV");
+            colCV.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getNomFichier()
+                )
+            );
+            colCV.setPrefWidth(200);
+            
+            TableColumn<Document, Void> colActions = new TableColumn<>("Actions");
+            colActions.setCellFactory(param -> new TableCell<>() {
+                private final Button btnTelechargerCV = new Button("Télécharger CV");
+                private final HBox actionsBox = new HBox(5, btnTelechargerCV);
+                
+                {
+                    btnTelechargerCV.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-pref-width: 100;");
+                    
+                    btnTelechargerCV.setOnAction(event -> {
+                        Document doc = getTableView().getItems().get(getIndex());
+                        telechargerCVDemandeur(doc.getDemandeur());
+                    });
+                }
+                
+                @Override
+                protected void updateItem(Void item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty) {
+                        setGraphic(null);
+                    } else {
+                        setGraphic(actionsBox);
+                    }
+                }
+            });
+            colActions.setPrefWidth(200);
+            
+            tableCandidats.getColumns().addAll(colNomCandidat, colEmail, colDiplome, colExperience, colSalaire, colCV, colActions);
+            
+            // Charger les candidats avec CV validés
+            List<Document> candidatsAvecCV = documentService.getCandidatsAvecCVValides();
+            tableCandidats.getItems().addAll(candidatsAvecCV);
+            
+            Button btnRefresh = new Button("Actualiser");
+            btnRefresh.setOnAction(e -> {
+                tableCandidats.getItems().clear();
+                tableCandidats.getItems().addAll(documentService.getCandidatsAvecCVValides());
+            });
+            
+            root.getChildren().addAll(title, tableCandidats, btnRefresh);
+            
+            Scene scene = new Scene(root, 900, 600);
+            stage.setScene(scene);
+            stage.show();
+        }
+    }
+    
+    private void voirCV(Document document) {
+        try {
+            File cvFile = documentService.getDocumentFile(document.getId());
+            
+            // Ouvrir le fichier avec le programme par défaut du système
+            java.awt.Desktop.getDesktop().open(cvFile);
+            
+            showAlert("Information", "CV ouvert avec succès", Alert.AlertType.INFORMATION);
+            
+        } catch (IOException e) {
+            showAlert("Erreur", "Impossible d'ouvrir le CV: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+    
+    private void recruterCandidat(Document document, Stage parentStage) {
+        DemandeurEmploi candidat = document.getDemandeur();
+        Entreprise entreprise = (Entreprise) utilisateurConnecte;
+        
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirmation de recrutement");
+        alert.setHeaderText("Recruter ce candidat ?");
+        alert.setContentText(
+            "Êtes-vous sûr de vouloir recruter " + candidat.getNom() + " " + candidat.getPrenom() + " ?\n\n" +
+            "Diplôme: " + candidat.getDiplome() + "\n" +
+            "Expérience: " + candidat.getExperience() + " an(s)\n" +
+            "Salaire souhaité: " + candidat.getSalaireSouhaite() + " €"
+        );
+        
+        if (alert.showAndWait().get() == ButtonType.OK) {
+            try {
+                // Créer un enregistrement de recrutement
+                Recrutement recrutement = new Recrutement();
+                recrutement.setEntreprise(entreprise);
+                recrutement.setDemandeur(candidat);
+                recrutement.setDateRecrutement(LocalDate.now());
+                
+                recrutementRepository.save(recrutement);
+                
+                showAlert("Succès", 
+                    "Candidat recruté avec succès !\n" +
+                    "Un email de confirmation sera envoyé à " + candidat.getLogin(), 
+                    Alert.AlertType.INFORMATION);
+                
+                // Optionnel: fermer la fenêtre des candidats
+                parentStage.close();
+                
+            } catch (Exception e) {
+                showAlert("Erreur", "Erreur lors du recrutement: " + e.getMessage(), Alert.AlertType.ERROR);
+            }
+        }
+    }
+    
+    public void showMesRecrutements() {
+        if (utilisateurConnecte instanceof Entreprise) {
+            Stage stage = new Stage();
+            stage.setTitle("Mes recrutements");
+            
+            VBox root = new VBox(15);
+            root.setPadding(new Insets(20));
+            
+            Label title = new Label("Historique des recrutements");
+            title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+            
+            // TableView pour afficher les recrutements
+            TableView<Recrutement> tableRecrutements = new TableView<>();
+            
+            TableColumn<Recrutement, String> colNomCandidat = new TableColumn<>("Nom du candidat");
+            colNomCandidat.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getNom() + " " + 
+                    cellData.getValue().getDemandeur().getPrenom()
+                )
+            );
+            
+            TableColumn<Recrutement, String> colEmail = new TableColumn<>("Email");
+            colEmail.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDemandeur().getLogin()
+                )
+            );
+            
+            TableColumn<Recrutement, String> colDateRecrutement = new TableColumn<>("Date de recrutement");
+            colDateRecrutement.setCellValueFactory(cellData -> 
+                new javafx.beans.property.SimpleStringProperty(
+                    cellData.getValue().getDateRecrutement().toString()
+                )
+            );
+            
+            TableColumn<Recrutement, String> colOffre = new TableColumn<>("Offre associée");
+            colOffre.setCellValueFactory(cellData -> {
+                Offre offre = cellData.getValue().getOffre();
+                return new javafx.beans.property.SimpleStringProperty(
+                    offre != null ? offre.getTitre() : "Recrutement direct"
+                );
+            });
+            
+            tableRecrutements.getColumns().addAll(colNomCandidat, colEmail, colDateRecrutement, colOffre);
+            
+            // Charger les recrutements de l'entreprise
+            List<Recrutement> mesRecrutements = recrutementRepository.findByEntrepriseIdUtilisateur(
+                ((Entreprise) utilisateurConnecte).getIdUtilisateur()
+            );
+            tableRecrutements.getItems().addAll(mesRecrutements);
+            
+            Button btnRefresh = new Button("Actualiser");
+            btnRefresh.setOnAction(e -> {
+                tableRecrutements.getItems().clear();
+                List<Recrutement> recrutements = recrutementRepository.findByEntrepriseIdUtilisateur(
+                    ((Entreprise) utilisateurConnecte).getIdUtilisateur()
+                );
+                tableRecrutements.getItems().addAll(recrutements);
+            });
+            
+            root.getChildren().addAll(title, tableRecrutements, btnRefresh);
+            
+            Scene scene = new Scene(root, 800, 600);
+            stage.setScene(scene);
+            stage.show();
+        }
     }
 }
 

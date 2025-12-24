@@ -25,7 +25,7 @@ public class Recrutement {
     private LocalDate dateRecrutement;
     
     @ManyToOne
-    @JoinColumn(name = "id_offre", nullable = false)
+    @JoinColumn(name = "id_offre")
     private Offre offre;
     
     @ManyToOne
